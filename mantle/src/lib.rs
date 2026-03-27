@@ -1,10 +1,12 @@
 mod artifacts;
 mod cow;
 mod error;
+mod hydrate;
 mod repo;
 mod types;
 mod worktree;
 
+pub use hydrate::hydrate;
 pub use artifacts::{
     bootstrap_worktreeinclude, compute_effective_worktreeinclude,
     generate_default_worktreeinclude, scan_clone_candidates, scan_worktreeinclude,
