@@ -1,0 +1,226 @@
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process;
+
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+use crate::permissions;
+
+#[derive(Deserialize)]
+struct CreateHookInput {
+    name: Option<String>,
+    cwd: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RemoveHookInput {
+    #[serde(alias = "worktree_path")]
+    worktree_path: Option<String>,
+}
+
+#[derive(Serialize)]
+struct CreateOutput {
+    worktree_path: String,
+    branch: String,
+}
+
+pub fn run_create(name: Option<String>, cwd: Option<String>) {
+    let (task_name, working_dir) = if let Some(n) = name {
+        (n, cwd.unwrap_or_else(|| ".".to_string()))
+    } else {
+        match read_stdin::<CreateHookInput>() {
+            Some(input) => {
+                let n = input.name.unwrap_or_else(|| {
+                    eprintln!("error: --name is required");
+                    process::exit(1);
+                });
+                let c = input.cwd.unwrap_or_else(|| ".".to_string());
+                (n, c)
+            }
+            None => {
+                eprintln!("error: --name is required");
+                process::exit(1);
+            }
+        }
+    };
+
+    let repo_root = match resolve_repo_root(&working_dir) {
+        Some(p) => p,
+        None => {
+            eprintln!("error: not a git repository: {working_dir}");
+            process::exit(1);
+        }
+    };
+
+    let slug = sanitize_slug(&task_name);
+    let repo_name = Path::new(&repo_root)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "repo".to_string());
+
+    let worktree_base = worktree_base_dir(&repo_name);
+    let worktree_path = worktree_base.join(&slug);
+    let branch = format!("claude/{slug}");
+
+    if let Err(e) = std::fs::create_dir_all(&worktree_base) {
+        eprintln!("error: failed to create worktree directory: {e}");
+        process::exit(1);
+    }
+
+    let wt_str = worktree_path.to_string_lossy().to_string();
+
+    if let Err(e) = mantle::worktree_add_new_branch(&repo_root, &wt_str, &branch, "HEAD") {
+        eprintln!("error: failed to create worktree: {e}");
+        process::exit(1);
+    }
+
+    match mantle::hydrate(&repo_root, &wt_str, &[]) {
+        Ok(result) => {
+            if !result.cloned.is_empty() {
+                eprintln!("hydrated {} directories", result.cloned.len());
+            }
+        }
+        Err(e) => {
+            eprintln!("warning: hydration failed: {e}");
+        }
+    }
+
+    let settings_path = worktree_path.join(".claude").join("settings.local.json");
+    if let Err(e) = permissions::inject_grants(&wt_str, &settings_path.to_string_lossy()) {
+        eprintln!("warning: failed to inject permissions: {e}");
+    }
+
+    let mcp_src = Path::new(&repo_root).join(".mcp.json");
+    let mcp_dst = worktree_path.join(".mcp.json");
+    if mcp_src.exists() && !mcp_dst.exists() {
+        let _ = std::fs::copy(&mcp_src, &mcp_dst);
+    }
+
+    let output = CreateOutput {
+        worktree_path: wt_str,
+        branch,
+    };
+    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+}
+
+pub fn run_remove(path: Option<String>, force: bool) {
+    let worktree_path = if let Some(p) = path {
+        p
+    } else {
+        match read_stdin::<RemoveHookInput>() {
+            Some(input) => input.worktree_path.unwrap_or_else(|| {
+                eprintln!("error: --path is required");
+                process::exit(1);
+            }),
+            None => {
+                eprintln!("error: --path is required");
+                process::exit(1);
+            }
+        }
+    };
+
+    let repo_root = match resolve_repo_root(&worktree_path) {
+        Some(p) => p,
+        None => {
+            eprintln!("error: could not find parent repo for worktree");
+            process::exit(1);
+        }
+    };
+
+    let result = if force {
+        mantle::worktree_remove_force(&repo_root, &worktree_path)
+    } else {
+        mantle::worktree_remove_clean(&repo_root, &worktree_path)
+    };
+
+    if let Err(e) = result {
+        eprintln!("error: {e}");
+        process::exit(1);
+    }
+
+    eprintln!("removed worktree: {worktree_path}");
+}
+
+pub fn sha256_prefix(input: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    let result = hasher.finalize();
+    hex_encode(&result[..6])
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+pub fn sanitize_slug(name: &str) -> String {
+    let slug: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .collect();
+
+    let mut result = String::new();
+    let mut prev_dash = false;
+    for c in slug.chars() {
+        if c == '-' {
+            if !prev_dash && !result.is_empty() {
+                result.push(c);
+            }
+            prev_dash = true;
+        } else {
+            result.push(c);
+            prev_dash = false;
+        }
+    }
+
+    if result.len() > 60 {
+        result.truncate(60);
+    }
+
+    result.trim_end_matches('-').to_string()
+}
+
+fn worktree_base_dir(repo_name: &str) -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home)
+        .join(".cuttlefish")
+        .join("worktrees")
+        .join(repo_name)
+}
+
+fn resolve_repo_root(path: &str) -> Option<String> {
+    let p = Path::new(path);
+    let dir = if p.is_dir() {
+        p.to_path_buf()
+    } else {
+        p.parent()?.to_path_buf()
+    };
+    let mut current = dir;
+    loop {
+        if current.join(".git").is_dir() {
+            return Some(current.to_string_lossy().to_string());
+        }
+        let git_path = current.join(".git");
+        if git_path.is_file() {
+            if let Ok(content) = std::fs::read_to_string(&git_path) {
+                if content.starts_with("gitdir:") {
+                    return Some(current.to_string_lossy().to_string());
+                }
+            }
+        }
+        if !current.pop() {
+            return None;
+        }
+    }
+}
+
+#[allow(unsafe_code)]
+fn read_stdin<T: serde::de::DeserializeOwned>() -> Option<T> {
+    if unsafe { libc::isatty(libc::STDIN_FILENO) != 0 } {
+        return None;
+    }
+    let mut buf = String::new();
+    std::io::stdin().read_to_string(&mut buf).ok()?;
+    serde_json::from_str(&buf).ok()
+}

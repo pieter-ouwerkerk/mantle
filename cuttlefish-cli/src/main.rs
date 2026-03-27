@@ -2,6 +2,8 @@ use clap::{Parser, Subcommand};
 
 mod cmd_hydrate;
 mod cmd_init;
+mod cmd_worktree;
+mod permissions;
 
 #[derive(Parser)]
 #[command(name = "cuttlefish", version, about = "CoW-accelerated git worktree hydration")]
@@ -41,6 +43,30 @@ enum Commands {
         #[arg(long, value_delimiter = ',')]
         exclude: Vec<String>,
     },
+
+    /// Manage git worktrees with CoW hydration
+    Worktree {
+        #[command(subcommand)]
+        action: WorktreeAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum WorktreeAction {
+    /// Create a new worktree with hydration
+    Create {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        cwd: Option<String>,
+    },
+    /// Remove a worktree
+    Remove {
+        #[arg(long)]
+        path: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 fn main() {
@@ -50,5 +76,9 @@ fn main() {
         Commands::Hydrate { worktree, source, exclude } => {
             cmd_hydrate::run(worktree, source, exclude);
         }
+        Commands::Worktree { action } => match action {
+            WorktreeAction::Create { name, cwd } => cmd_worktree::run_create(name, cwd),
+            WorktreeAction::Remove { path, force } => cmd_worktree::run_remove(path, force),
+        },
     }
 }
