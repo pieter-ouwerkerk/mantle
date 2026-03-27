@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -6,6 +6,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::cmd_worktree;
+use crate::util::{resolve_repo_root, resolve_repo_root_from_file};
 
 #[derive(Deserialize)]
 struct HookEvent {
@@ -169,27 +170,8 @@ fn read_cached_worktree(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok().filter(|s| !s.is_empty())
 }
 
-fn resolve_repo_root_from_file(file_path: &str) -> Option<String> {
-    let p = Path::new(file_path);
-    let dir = if p.is_dir() { p } else { p.parent()? };
-    resolve_repo_root(&dir.to_string_lossy())
-}
-
-fn resolve_repo_root(path: &str) -> Option<String> {
-    let mut current = PathBuf::from(path);
-    loop {
-        if current.join(".git").exists() {
-            return Some(current.to_string_lossy().to_string());
-        }
-        if !current.pop() {
-            return None;
-        }
-    }
-}
-
-#[allow(unsafe_code)]
 fn read_event() -> Option<HookEvent> {
-    if unsafe { libc::isatty(libc::STDIN_FILENO) != 0 } {
+    if std::io::stdin().is_terminal() {
         return None;
     }
     let mut buf = String::new();

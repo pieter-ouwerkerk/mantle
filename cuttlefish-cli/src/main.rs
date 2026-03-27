@@ -5,6 +5,7 @@ mod cmd_hydrate;
 mod cmd_init;
 mod cmd_worktree;
 mod permissions;
+mod util;
 
 #[derive(Parser)]
 #[command(

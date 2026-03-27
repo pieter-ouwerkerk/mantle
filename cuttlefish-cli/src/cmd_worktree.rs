@@ -1,4 +1,3 @@
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -6,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::permissions;
+use crate::util::{read_stdin, resolve_repo_root};
 
 #[derive(Deserialize)]
 struct CreateHookInput {
@@ -184,64 +184,34 @@ fn worktree_base_dir(repo_name: &str) -> PathBuf {
         .join(repo_name)
 }
 
-fn resolve_repo_root(path: &str) -> Option<String> {
-    let p = Path::new(path);
-    let dir = if p.is_dir() {
-        p.to_path_buf()
-    } else {
-        p.parent()?.to_path_buf()
-    };
-    let mut current = dir;
-    loop {
-        if current.join(".git").is_dir() {
-            return Some(current.to_string_lossy().to_string());
-        }
-        let git_path = current.join(".git");
-        if git_path.is_file() {
-            if let Ok(content) = std::fs::read_to_string(&git_path) {
-                let content = content.trim();
-                if let Some(gitdir) = content.strip_prefix("gitdir:") {
-                    let gitdir = gitdir.trim();
-                    // A linked worktree's .git file points to
-                    // <main-repo>/.git/worktrees/<name>. Walk up to find the
-                    // main .git directory and return its parent.
-                    let gitdir_path = Path::new(gitdir);
-                    let abs_gitdir = if gitdir_path.is_absolute() {
-                        gitdir_path.to_path_buf()
-                    } else {
-                        current.join(gitdir_path)
-                    };
-                    // Walk up from abs_gitdir until we find the directory
-                    // whose parent contains a real .git dir.
-                    let mut candidate = abs_gitdir.as_path();
-                    loop {
-                        if let Some(parent) = candidate.parent() {
-                            if parent.join(".git").is_dir() {
-                                return Some(parent.to_string_lossy().to_string());
-                            }
-                            candidate = parent;
-                        } else {
-                            break;
-                        }
-                    }
-                    // Fallback: treat the directory containing the .git file
-                    // as the repo root (plain submodule or non-worktree case).
-                    return Some(current.to_string_lossy().to_string());
-                }
-            }
-        }
-        if !current.pop() {
-            return None;
-        }
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[allow(unsafe_code)]
-fn read_stdin<T: serde::de::DeserializeOwned>() -> Option<T> {
-    if unsafe { libc::isatty(libc::STDIN_FILENO) != 0 } {
-        return None;
+    #[test]
+    fn test_sanitize_slug_basic() {
+        assert_eq!(sanitize_slug("My Feature"), "my-feature");
     }
-    let mut buf = String::new();
-    std::io::stdin().read_to_string(&mut buf).ok()?;
-    serde_json::from_str(&buf).ok()
+
+    #[test]
+    fn test_sanitize_slug_special_chars() {
+        assert_eq!(sanitize_slug("fix/CUT-123: auth bug"), "fix-cut-123-auth-bug");
+    }
+
+    #[test]
+    fn test_sanitize_slug_truncation() {
+        let long_name = "a".repeat(100);
+        let result = sanitize_slug(&long_name);
+        assert!(result.len() <= 60);
+    }
+
+    #[test]
+    fn test_sanitize_slug_no_trailing_dash() {
+        assert_eq!(sanitize_slug("test-"), "test");
+    }
+
+    #[test]
+    fn test_sanitize_slug_consecutive_dashes() {
+        assert_eq!(sanitize_slug("a---b"), "a-b");
+    }
 }
