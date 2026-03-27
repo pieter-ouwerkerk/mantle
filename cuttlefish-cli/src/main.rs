@@ -1,12 +1,54 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
+
+mod cmd_hydrate;
+mod cmd_init;
 
 #[derive(Parser)]
 #[command(name = "cuttlefish", version, about = "CoW-accelerated git worktree hydration")]
-enum Cli {
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
     /// Bootstrap .worktreeinclude for the current repository
-    Init,
+    Init {
+        /// Repository path (default: current directory)
+        #[arg(default_value = ".")]
+        path: String,
+
+        /// Show what would be generated without writing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Show effective hydration config
+        #[arg(long)]
+        show: bool,
+    },
+
+    /// Hydrate a worktree with CoW-cloned build artifacts
+    Hydrate {
+        /// Worktree path to hydrate
+        #[arg(long)]
+        worktree: Option<String>,
+
+        /// Source repo path (default: current directory)
+        #[arg(long)]
+        source: Option<String>,
+
+        /// Directories to exclude from hydration
+        #[arg(long, value_delimiter = ',')]
+        exclude: Vec<String>,
+    },
 }
 
 fn main() {
-    let _cli = Cli::parse();
+    let cli = Cli::parse();
+    match cli.command {
+        Commands::Init { path, dry_run, show } => cmd_init::run(&path, dry_run, show),
+        Commands::Hydrate { worktree, source, exclude } => {
+            cmd_hydrate::run(worktree, source, exclude);
+        }
+    }
 }
