@@ -199,7 +199,33 @@ fn resolve_repo_root(path: &str) -> Option<String> {
         let git_path = current.join(".git");
         if git_path.is_file() {
             if let Ok(content) = std::fs::read_to_string(&git_path) {
-                if content.starts_with("gitdir:") {
+                let content = content.trim();
+                if let Some(gitdir) = content.strip_prefix("gitdir:") {
+                    let gitdir = gitdir.trim();
+                    // A linked worktree's .git file points to
+                    // <main-repo>/.git/worktrees/<name>. Walk up to find the
+                    // main .git directory and return its parent.
+                    let gitdir_path = Path::new(gitdir);
+                    let abs_gitdir = if gitdir_path.is_absolute() {
+                        gitdir_path.to_path_buf()
+                    } else {
+                        current.join(gitdir_path)
+                    };
+                    // Walk up from abs_gitdir until we find the directory
+                    // whose parent contains a real .git dir.
+                    let mut candidate = abs_gitdir.as_path();
+                    loop {
+                        if let Some(parent) = candidate.parent() {
+                            if parent.join(".git").is_dir() {
+                                return Some(parent.to_string_lossy().to_string());
+                            }
+                            candidate = parent;
+                        } else {
+                            break;
+                        }
+                    }
+                    // Fallback: treat the directory containing the .git file
+                    // as the repo root (plain submodule or non-worktree case).
                     return Some(current.to_string_lossy().to_string());
                 }
             }
