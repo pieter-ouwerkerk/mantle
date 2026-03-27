@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+mod cmd_hook;
 mod cmd_hydrate;
 mod cmd_init;
 mod cmd_worktree;
@@ -49,6 +50,9 @@ enum Commands {
         #[command(subcommand)]
         action: WorktreeAction,
     },
+
+    /// Handle Claude Code / Codex hook events (reads JSON from stdin)
+    Hook,
 }
 
 #[derive(Subcommand)]
@@ -80,5 +84,6 @@ fn main() {
             WorktreeAction::Create { name, cwd } => cmd_worktree::run_create(name, cwd),
             WorktreeAction::Remove { path, force } => cmd_worktree::run_remove(path, force),
         },
+        Commands::Hook => cmd_hook::run(),
     }
 }
