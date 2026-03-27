@@ -137,17 +137,13 @@ fn clone_tree(src_dir: &Path, dst_dir: &Path, source_root: &Path, result: &mut C
 /// whose targets fall outside BOTH the original source tree and the cloned tree.
 /// Relative symlinks typically resolve within the clone, so we must check both roots.
 fn remove_external_symlinks(cloned_root: &Path, source_root: &Path) {
-    let entries = match fs::read_dir(cloned_root) {
-        Ok(e) => e,
-        Err(_) => return,
+    let Ok(entries) = fs::read_dir(cloned_root) else {
+        return;
     };
 
     for entry in entries.flatten() {
         let path = entry.path();
-        let ft = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => continue,
-        };
+        let Ok(ft) = entry.file_type() else { continue };
 
         if ft.is_dir() {
             remove_external_symlinks(&path, source_root);
@@ -230,17 +226,15 @@ pub fn cow_clone_directory(source: &str, destination: &str) -> Result<CowCloneRe
 /// Count regular files recursively (for reporting after whole-directory clone).
 fn count_files_recursive(dir: &Path) -> u32 {
     let mut count: u32 = 0;
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let ft = match entry.file_type() {
-                Ok(ft) => ft,
-                Err(_) => continue,
-            };
-            if ft.is_dir() {
-                count += count_files_recursive(&entry.path());
-            } else if ft.is_file() || ft.is_symlink() {
-                count += 1;
-            }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return count;
+    };
+    for entry in entries.flatten() {
+        let Ok(ft) = entry.file_type() else { continue };
+        if ft.is_dir() {
+            count += count_files_recursive(&entry.path());
+        } else if ft.is_file() || ft.is_symlink() {
+            count += 1;
         }
     }
     count

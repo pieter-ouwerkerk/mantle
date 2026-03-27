@@ -16,22 +16,17 @@ struct HookInput {
 pub fn run(worktree: Option<String>, source: Option<String>, exclude: Vec<String>) {
     let (worktree_path, source_path, exclude_list) = if let Some(wt) = worktree {
         (wt, source.unwrap_or_else(|| ".".to_string()), exclude)
+    } else if let Some(input) = read_hook_input() {
+        let wt = input.worktree_path.unwrap_or_else(|| {
+            eprintln!("error: --worktree is required (or provide worktree_path in stdin JSON)");
+            process::exit(1);
+        });
+        let src = input.source.unwrap_or_else(|| ".".to_string());
+        let exc = input.exclude.unwrap_or_default();
+        (wt, src, exc)
     } else {
-        match read_hook_input() {
-            Some(input) => {
-                let wt = input.worktree_path.unwrap_or_else(|| {
-                    eprintln!("error: --worktree is required (or provide worktree_path in stdin JSON)");
-                    process::exit(1);
-                });
-                let src = input.source.unwrap_or_else(|| ".".to_string());
-                let exc = input.exclude.unwrap_or_default();
-                (wt, src, exc)
-            }
-            None => {
-                eprintln!("error: --worktree is required");
-                process::exit(1);
-            }
-        }
+        eprintln!("error: --worktree is required");
+        process::exit(1);
     };
 
     let repo_path = resolve_repo_root(&source_path).unwrap_or(source_path);

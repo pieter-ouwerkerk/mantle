@@ -13,23 +13,22 @@ use crate::types::{
 
 /// Build a `gix_ignore::Search` from a file on disk.
 /// Returns `None` if the file doesn't exist or can't be read.
-fn build_search_from_file(
-    file_path: &Path,
-    repo_root: &Path,
-) -> Option<gix_ignore::Search> {
+fn build_search_from_file(file_path: &Path, repo_root: &Path) -> Option<gix_ignore::Search> {
     let bytes = std::fs::read(file_path).ok()?;
     let mut search = gix_ignore::Search::default();
     search.add_patterns_buffer(
         &bytes,
         file_path,
         Some(repo_root),
-        Ignore { support_precious: false },
+        Ignore {
+            support_precious: false,
+        },
     );
     Some(search)
 }
 
 /// Scan a repository using `.worktreeinclude` (or `.gitignore` fallback) with full
-/// gitignore pattern syntax via `gix_ignore`. Returns both directory candidates (CoW clone)
+/// gitignore pattern syntax via `gix_ignore`. Returns both directory candidates (`CoW` clone)
 /// and file candidates (copy).
 pub fn scan_worktreeinclude(
     repo_path: &str,
@@ -90,7 +89,9 @@ pub fn scan_worktreeinclude(
         &bytes,
         source_path,
         Some(repo_root),
-        Ignore { support_precious: false },
+        Ignore {
+            support_precious: false,
+        },
     );
 
     // 3. Walk the repo tree recursively
@@ -102,7 +103,15 @@ pub fn scan_worktreeinclude(
         IncludeSource::GitignoreFallback => ConfigSource::Gitignore,
         IncludeSource::None => ConfigSource::BuiltIn, // unreachable — we return early for None
     };
-    walk_tree(repo_root, repo_root, worktree_root, &search, candidate_config_source, &mut clone_candidates, &mut file_candidates);
+    walk_tree(
+        repo_root,
+        repo_root,
+        worktree_root,
+        &search,
+        candidate_config_source,
+        &mut clone_candidates,
+        &mut file_candidates,
+    );
 
     Ok(WorktreeIncludeResult {
         clone_candidates,
@@ -120,16 +129,12 @@ fn walk_tree(
     clone_candidates: &mut Vec<CloneCandidate>,
     file_candidates: &mut Vec<FileCandidate>,
 ) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
     };
 
     for entry in entries.flatten() {
-        let ft = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => continue,
-        };
+        let Ok(ft) = entry.file_type() else { continue };
 
         // Skip symlinks
         if ft.is_symlink() {
@@ -137,9 +142,8 @@ fn walk_tree(
         }
 
         let path = entry.path();
-        let rel = match path.strip_prefix(repo_root) {
-            Ok(r) => r,
-            Err(_) => continue,
+        let Ok(rel) = path.strip_prefix(repo_root) else {
+            continue;
         };
 
         let rel_str = rel.to_string_lossy();
@@ -150,10 +154,10 @@ fn walk_tree(
         }
 
         let is_dir = ft.is_dir();
-        let rel_bstr = rel_str.as_bytes().as_bstr();
+        let rel_as_bstr = rel_str.as_bytes().as_bstr();
 
         let matched = search.pattern_matching_relative_path(
-            rel_bstr,
+            rel_as_bstr,
             Some(is_dir),
             gix_ignore::glob::pattern::Case::Sensitive,
         );
@@ -191,14 +195,22 @@ fn walk_tree(
             _ => {
                 // Not matched (or negated) — recurse into directories
                 if is_dir {
-                    walk_tree(dir.join(entry.file_name()).as_path(), repo_root, worktree_root, search, candidate_config_source, clone_candidates, file_candidates);
+                    walk_tree(
+                        dir.join(entry.file_name()).as_path(),
+                        repo_root,
+                        worktree_root,
+                        search,
+                        candidate_config_source,
+                        clone_candidates,
+                        file_candidates,
+                    );
                 }
             }
         }
     }
 }
 
-/// Scan a repository for known artifact directories that could be cloned (CoW)
+/// Scan a repository for known artifact directories that could be cloned (`CoW`)
 /// into a worktree. Compares lockfiles byte-for-byte to determine safety.
 ///
 /// This is the legacy entry point. It delegates to `scan_worktreeinclude` for
@@ -219,16 +231,12 @@ fn dir_size(path: &Path) -> u64 {
 fn walkdir(path: &Path) -> u64 {
     let mut total: u64 = 0;
 
-    let entries = match std::fs::read_dir(path) {
-        Ok(e) => e,
-        Err(_) => return 0,
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return 0;
     };
 
     for entry in entries.flatten() {
-        let ft = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => continue,
-        };
+        let Ok(ft) = entry.file_type() else { continue };
 
         if ft.is_file() {
             total += entry.metadata().map(|m| m.len()).unwrap_or(0);
@@ -262,7 +270,11 @@ pub fn compute_effective_worktreeinclude(
     // Try .worktreeinclude first, then .gitignore
     let (search, config_source, effective_source) = if has_worktreeinclude_file {
         match build_search_from_file(&repo.join(".worktreeinclude"), repo) {
-            Some(s) => (Some(s), ConfigSource::Worktreeinclude, EffectiveSource::Worktreeinclude),
+            Some(s) => (
+                Some(s),
+                ConfigSource::Worktreeinclude,
+                EffectiveSource::Worktreeinclude,
+            ),
             None => (None, ConfigSource::BuiltIn, EffectiveSource::BuiltIn),
         }
     } else if repo.join(".gitignore").is_file() {
@@ -279,104 +291,17 @@ pub fn compute_effective_worktreeinclude(
     let mut suggestions = Vec::new();
 
     if let Some(ref search) = search {
-        // Walk top-level entries and check which ones match
-        if let Ok(read_dir) = std::fs::read_dir(repo) {
-            for entry in read_dir.flatten() {
-                let ft = match entry.file_type() {
-                    Ok(ft) => ft,
-                    Err(_) => continue,
-                };
-
-                if ft.is_symlink() {
-                    continue;
-                }
-
-                let name = entry.file_name().to_string_lossy().to_string();
-
-                // Skip .git
-                if name == ".git" {
-                    continue;
-                }
-
-                let is_dir = ft.is_dir();
-                let rel_bstr = name.as_bytes().as_bstr();
-
-                let matched = search.pattern_matching_relative_path(
-                    rel_bstr,
-                    Some(is_dir),
-                    gix_ignore::glob::pattern::Case::Sensitive,
-                );
-
-                let is_matched = matches!(matched, Some(m) if !m.pattern.is_negative());
-
-                if is_matched {
-                    let size = if is_dir { dir_size(&entry.path()) } else {
-                        entry.metadata().map(|m| m.len()).unwrap_or(0)
-                    };
-                    entries.push(EffectiveEntry {
-                        path: name.clone(),
-                        source: effective_source,
-                        exists_on_disk: true,
-                        size_bytes: size,
-                        included: true,
-                    });
-                    covered_dirs.insert(name);
-                } else if is_dir {
-                    // Check if this is a large uncovered directory
-                    if name.starts_with('.') {
-                        continue;
-                    }
-                    let size = dir_size(&entry.path());
-                    if size >= size_threshold_bytes {
-                        entries.push(EffectiveEntry {
-                            path: name.clone(),
-                            source: EffectiveSource::Suggestion,
-                            exists_on_disk: true,
-                            size_bytes: size,
-                            included: false,
-                        });
-                        let size_mb = size / (1024 * 1024);
-                        suggestions.push(format!(
-                            "'{}' is {}MB and not included in hydration — consider adding it",
-                            name, size_mb
-                        ));
-                        covered_dirs.insert(name);
-                    }
-                }
-            }
-        }
+        collect_matched_entries(
+            repo,
+            search,
+            effective_source,
+            size_threshold_bytes,
+            &mut entries,
+            &mut covered_dirs,
+            &mut suggestions,
+        );
     } else {
-        // No config file — just scan for large directories to suggest
-        if let Ok(read_dir) = std::fs::read_dir(repo) {
-            for entry in read_dir.flatten() {
-                let ft = match entry.file_type() {
-                    Ok(ft) => ft,
-                    Err(_) => continue,
-                };
-                if !ft.is_dir() || ft.is_symlink() {
-                    continue;
-                }
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with('.') {
-                    continue;
-                }
-                let size = dir_size(&entry.path());
-                if size >= size_threshold_bytes {
-                    entries.push(EffectiveEntry {
-                        path: name.clone(),
-                        source: EffectiveSource::Suggestion,
-                        exists_on_disk: true,
-                        size_bytes: size,
-                        included: false,
-                    });
-                    let size_mb = size / (1024 * 1024);
-                    suggestions.push(format!(
-                        "'{}' is {}MB and not included in hydration — consider adding it",
-                        name, size_mb
-                    ));
-                }
-            }
-        }
+        collect_large_dir_suggestions(repo, size_threshold_bytes, &mut entries, &mut suggestions);
     }
 
     Ok(EffectiveWorktreeinclude {
@@ -385,6 +310,103 @@ pub fn compute_effective_worktreeinclude(
         has_worktreeinclude_file,
         suggestions,
     })
+}
+
+fn collect_matched_entries(
+    repo: &Path,
+    search: &gix_ignore::Search,
+    effective_source: EffectiveSource,
+    size_threshold_bytes: u64,
+    entries: &mut Vec<EffectiveEntry>,
+    covered_dirs: &mut HashSet<String>,
+    suggestions: &mut Vec<String>,
+) {
+    let Ok(read_dir) = std::fs::read_dir(repo) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let Ok(ft) = entry.file_type() else { continue };
+        if ft.is_symlink() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == ".git" {
+            continue;
+        }
+        let is_dir = ft.is_dir();
+        let matched = search.pattern_matching_relative_path(
+            name.as_bytes().as_bstr(),
+            Some(is_dir),
+            gix_ignore::glob::pattern::Case::Sensitive,
+        );
+        let is_matched = matches!(matched, Some(m) if !m.pattern.is_negative());
+        if is_matched {
+            let size = if is_dir {
+                dir_size(&entry.path())
+            } else {
+                entry.metadata().map(|m| m.len()).unwrap_or(0)
+            };
+            entries.push(EffectiveEntry {
+                path: name.clone(),
+                source: effective_source,
+                exists_on_disk: true,
+                size_bytes: size,
+                included: true,
+            });
+            covered_dirs.insert(name);
+        } else if is_dir && !name.starts_with('.') {
+            let size = dir_size(&entry.path());
+            if size >= size_threshold_bytes {
+                let size_mb = size / (1024 * 1024);
+                suggestions.push(format!(
+                    "'{name}' is {size_mb}MB and not included in hydration — consider adding it"
+                ));
+                entries.push(EffectiveEntry {
+                    path: name.clone(),
+                    source: EffectiveSource::Suggestion,
+                    exists_on_disk: true,
+                    size_bytes: size,
+                    included: false,
+                });
+                covered_dirs.insert(name);
+            }
+        }
+    }
+}
+
+fn collect_large_dir_suggestions(
+    repo: &Path,
+    size_threshold_bytes: u64,
+    entries: &mut Vec<EffectiveEntry>,
+    suggestions: &mut Vec<String>,
+) {
+    let Ok(read_dir) = std::fs::read_dir(repo) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let Ok(ft) = entry.file_type() else { continue };
+        if !ft.is_dir() || ft.is_symlink() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+        let size = dir_size(&entry.path());
+        if size >= size_threshold_bytes {
+            let size_mb = size / (1024 * 1024);
+            suggestions.push(format!(
+                "'{name}' is {size_mb}MB and not included in hydration — consider adding it"
+            ));
+            entries.push(EffectiveEntry {
+                path: name,
+                source: EffectiveSource::Suggestion,
+                exists_on_disk: true,
+                size_bytes: size,
+                included: false,
+            });
+        }
+    }
 }
 
 /// Generate a `.worktreeinclude` file with sensible defaults for a repository.
@@ -396,7 +418,9 @@ pub fn compute_effective_worktreeinclude(
 /// Returns the generated content and metadata. Does not write to disk — the caller
 /// decides whether to persist. If `.worktreeinclude` already exists, `already_exists`
 /// is set to true and the content reflects what *would* be generated (for preview).
-pub fn generate_default_worktreeinclude(repo_path: &str) -> Result<GeneratedWorktreeinclude, MantleError> {
+pub fn generate_default_worktreeinclude(
+    repo_path: &str,
+) -> Result<GeneratedWorktreeinclude, MantleError> {
     let repo = Path::new(repo_path);
     if !repo.is_dir() {
         return Err(MantleError::RepoNotFound {
@@ -416,15 +440,12 @@ pub fn generate_default_worktreeinclude(repo_path: &str) -> Result<GeneratedWork
 
     // Collect directory names that exist on disk from gitignore patterns
     let mut gitignore_dirs: Vec<String> = Vec::new();
-    if let Some(ref _content) = gitignore_content {
+    if gitignore_content.is_some() {
         // Use gix_ignore to find which top-level dirs match
         if let Some(search) = build_search_from_file(&repo.join(".gitignore"), repo) {
             if let Ok(read_dir) = std::fs::read_dir(repo) {
                 for entry in read_dir.flatten() {
-                    let ft = match entry.file_type() {
-                        Ok(ft) => ft,
-                        Err(_) => continue,
-                    };
+                    let Ok(ft) = entry.file_type() else { continue };
                     if !ft.is_dir() || ft.is_symlink() {
                         continue;
                     }
@@ -432,9 +453,8 @@ pub fn generate_default_worktreeinclude(repo_path: &str) -> Result<GeneratedWork
                     if name == ".git" {
                         continue;
                     }
-                    let rel_bstr = name.as_bytes().as_bstr();
                     let matched = search.pattern_matching_relative_path(
-                        rel_bstr,
+                        name.as_bytes().as_bstr(),
                         Some(true),
                         gix_ignore::glob::pattern::Case::Sensitive,
                     );
@@ -448,12 +468,8 @@ pub fn generate_default_worktreeinclude(repo_path: &str) -> Result<GeneratedWork
     }
 
     let content = match gitignore_content {
-        Some(ref gc) => {
-            format!("{}\n{}\n", header, gc.trim_end())
-        }
-        None => {
-            format!("{}\n", header)
-        }
+        Some(ref gc) => format!("{header}\n{}\n", gc.trim_end()),
+        None => format!("{header}\n"),
     };
 
     Ok(GeneratedWorktreeinclude {
@@ -471,7 +487,7 @@ pub fn bootstrap_worktreeinclude(repo_path: &str) -> Result<GeneratedWorktreeinc
     if !result.already_exists {
         let file_path = Path::new(repo_path).join(".worktreeinclude");
         std::fs::write(&file_path, &result.content).map_err(|e| MantleError::Internal {
-            message: format!("Failed to write .worktreeinclude: {}", e),
+            message: format!("Failed to write .worktreeinclude: {e}"),
         })?;
     }
     Ok(result)
@@ -695,7 +711,11 @@ mod tests {
         fs::create_dir(repo.path().join("node_modules")).unwrap();
         fs::create_dir(repo.path().join("target")).unwrap();
         fs::create_dir(repo.path().join("dist")).unwrap();
-        fs::write(repo.path().join(".gitignore"), "node_modules/\ntarget/\ndist/\n").unwrap();
+        fs::write(
+            repo.path().join(".gitignore"),
+            "node_modules/\ntarget/\ndist/\n",
+        )
+        .unwrap();
 
         let result = scan_clone_candidates(
             repo.path().to_str().unwrap(),
@@ -732,7 +752,11 @@ mod tests {
         let (repo, worktree) = setup_dirs();
         fs::create_dir(repo.path().join("dist")).unwrap();
         fs::create_dir(repo.path().join("node_modules")).unwrap();
-        fs::write(repo.path().join(".worktreeinclude"), "node_modules\n!dist\n").unwrap();
+        fs::write(
+            repo.path().join(".worktreeinclude"),
+            "node_modules\n!dist\n",
+        )
+        .unwrap();
 
         let result = scan_clone_candidates(
             repo.path().to_str().unwrap(),
@@ -952,11 +976,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         fs::create_dir(tmp.path().join("node_modules")).unwrap();
 
-        let result = compute_effective_worktreeinclude(
-            tmp.path().to_str().unwrap(),
-            100 * 1024 * 1024,
-        )
-        .unwrap();
+        let result =
+            compute_effective_worktreeinclude(tmp.path().to_str().unwrap(), 100 * 1024 * 1024)
+                .unwrap();
 
         assert!(!result.has_worktreeinclude_file);
         assert_eq!(result.config_source, ConfigSource::BuiltIn);
@@ -970,15 +992,17 @@ mod tests {
         fs::create_dir(tmp.path().join("node_modules")).unwrap();
         fs::write(tmp.path().join(".gitignore"), "node_modules/\n").unwrap();
 
-        let result = compute_effective_worktreeinclude(
-            tmp.path().to_str().unwrap(),
-            100 * 1024 * 1024,
-        )
-        .unwrap();
+        let result =
+            compute_effective_worktreeinclude(tmp.path().to_str().unwrap(), 100 * 1024 * 1024)
+                .unwrap();
 
         assert!(!result.has_worktreeinclude_file);
         assert_eq!(result.config_source, ConfigSource::Gitignore);
-        let nm = result.entries.iter().find(|e| e.path == "node_modules").unwrap();
+        let nm = result
+            .entries
+            .iter()
+            .find(|e| e.path == "node_modules")
+            .unwrap();
         assert_eq!(nm.source, EffectiveSource::Gitignore);
         assert!(nm.exists_on_disk);
         assert!(nm.included);
@@ -991,11 +1015,9 @@ mod tests {
         fs::write(tmp.path().join("vendor/data"), "stuff").unwrap();
         fs::write(tmp.path().join(".worktreeinclude"), "vendor\n").unwrap();
 
-        let result = compute_effective_worktreeinclude(
-            tmp.path().to_str().unwrap(),
-            100 * 1024 * 1024,
-        )
-        .unwrap();
+        let result =
+            compute_effective_worktreeinclude(tmp.path().to_str().unwrap(), 100 * 1024 * 1024)
+                .unwrap();
 
         assert!(result.has_worktreeinclude_file);
         assert_eq!(result.config_source, ConfigSource::Worktreeinclude);
@@ -1071,7 +1093,7 @@ mod tests {
         let result = generate_default_worktreeinclude(tmp.path().to_str().unwrap()).unwrap();
 
         assert!(result.builtin_dirs.is_empty()); // No more built-in specs
-        // gitignore_dirs lists directories that match via gix_ignore
+                                                 // gitignore_dirs lists directories that match via gix_ignore
         assert!(result.gitignore_dirs.contains(&"vendor".to_string()));
         assert!(result.gitignore_dirs.contains(&"generated".to_string()));
         // Content should contain the gitignore patterns
@@ -1187,8 +1209,14 @@ mod tests {
 
         assert_eq!(result.clone_candidates.len(), 1);
         assert!(result.clone_candidates[0].source_path.ends_with("build"));
-        assert_eq!(result.clone_candidates[0].artifact_type, ArtifactType::Generic);
-        assert_eq!(result.clone_candidates[0].strategy, HydrationStrategy::CowClone);
+        assert_eq!(
+            result.clone_candidates[0].artifact_type,
+            ArtifactType::Generic
+        );
+        assert_eq!(
+            result.clone_candidates[0].strategy,
+            HydrationStrategy::CowClone
+        );
         assert_eq!(result.clone_candidates[0].size_bytes, 3);
         assert_eq!(result.file_candidates.len(), 0);
     }
@@ -1231,7 +1259,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.file_candidates.len(), 2);
-        let paths: Vec<&str> = result.file_candidates.iter().map(|f| f.relative_path.as_str()).collect();
+        let paths: Vec<&str> = result
+            .file_candidates
+            .iter()
+            .map(|f| f.relative_path.as_str())
+            .collect();
         assert!(paths.contains(&"Configs/A.xcconfig"));
         assert!(paths.contains(&"Configs/B.xcconfig"));
         assert_eq!(result.clone_candidates.len(), 0);
@@ -1243,7 +1275,11 @@ mod tests {
         fs::create_dir(repo.path().join("Configs")).unwrap();
         fs::write(repo.path().join("Configs/A.xcconfig"), "a").unwrap();
         fs::write(repo.path().join("Configs/B.xcconfig"), "b").unwrap();
-        fs::write(repo.path().join(".worktreeinclude"), "*.xcconfig\n!Configs/B.xcconfig\n").unwrap();
+        fs::write(
+            repo.path().join(".worktreeinclude"),
+            "*.xcconfig\n!Configs/B.xcconfig\n",
+        )
+        .unwrap();
 
         let result = scan_worktreeinclude(
             repo.path().to_str().unwrap(),
@@ -1253,7 +1289,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.file_candidates.len(), 1);
-        assert_eq!(result.file_candidates[0].relative_path, "Configs/A.xcconfig");
+        assert_eq!(
+            result.file_candidates[0].relative_path,
+            "Configs/A.xcconfig"
+        );
     }
 
     #[test]
@@ -1272,7 +1311,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.file_candidates.len(), 2);
-        let paths: Vec<&str> = result.file_candidates.iter().map(|f| f.relative_path.as_str()).collect();
+        let paths: Vec<&str> = result
+            .file_candidates
+            .iter()
+            .map(|f| f.relative_path.as_str())
+            .collect();
         assert!(paths.contains(&"a/b/c/secrets.env"));
         assert!(paths.contains(&"a/top.env"));
     }
@@ -1295,7 +1338,10 @@ mod tests {
         assert_eq!(result.source, IncludeSource::GitignoreFallback);
         assert_eq!(result.clone_candidates.len(), 1);
         assert!(result.clone_candidates[0].source_path.ends_with("build"));
-        assert_eq!(result.clone_candidates[0].config_source, ConfigSource::Gitignore);
+        assert_eq!(
+            result.clone_candidates[0].config_source,
+            ConfigSource::Gitignore
+        );
     }
 
     #[test]
@@ -1321,7 +1367,11 @@ mod tests {
     fn test_scan_worktreeinclude_empty_file() {
         let (repo, worktree) = setup_dirs();
         fs::create_dir(repo.path().join("build")).unwrap();
-        fs::write(repo.path().join(".worktreeinclude"), "# only comments\n# nothing else\n").unwrap();
+        fs::write(
+            repo.path().join(".worktreeinclude"),
+            "# only comments\n# nothing else\n",
+        )
+        .unwrap();
 
         let result = scan_worktreeinclude(
             repo.path().to_str().unwrap(),

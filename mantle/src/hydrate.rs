@@ -67,7 +67,10 @@ pub fn hydrate(
         match std::fs::copy(&file_candidate.absolute_path, &dest) {
             Ok(_) => {}
             Err(e) => {
-                errors.push(format!("Failed to copy {}: {}", file_candidate.relative_path, e));
+                errors.push(format!(
+                    "Failed to copy {}: {}",
+                    file_candidate.relative_path, e
+                ));
             }
         }
     }
@@ -94,14 +97,19 @@ mod tests {
         let worktree = tempfile::tempdir().unwrap();
 
         fs::create_dir(repo.path().join("node_modules")).unwrap();
-        fs::write(repo.path().join("node_modules/index.js"), "module.exports = {}").unwrap();
+        fs::write(
+            repo.path().join("node_modules/index.js"),
+            "module.exports = {}",
+        )
+        .unwrap();
         fs::write(repo.path().join(".worktreeinclude"), "node_modules\n").unwrap();
 
         let result = hydrate(
             repo.path().to_str().unwrap(),
             worktree.path().to_str().unwrap(),
             &[],
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(result.cloned.len(), 1);
         assert!(result.cloned[0].ends_with("node_modules"));
@@ -116,13 +124,18 @@ mod tests {
 
         fs::create_dir(repo.path().join("node_modules")).unwrap();
         fs::create_dir(repo.path().join("target")).unwrap();
-        fs::write(repo.path().join(".worktreeinclude"), "node_modules\ntarget\n").unwrap();
+        fs::write(
+            repo.path().join(".worktreeinclude"),
+            "node_modules\ntarget\n",
+        )
+        .unwrap();
 
         let result = hydrate(
             repo.path().to_str().unwrap(),
             worktree.path().to_str().unwrap(),
             &["node_modules".to_string()],
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(result.cloned.len(), 1);
         assert!(result.cloned[0].ends_with("target"));
@@ -138,7 +151,8 @@ mod tests {
             repo.path().to_str().unwrap(),
             worktree.path().to_str().unwrap(),
             &[],
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(result.cloned.is_empty());
         assert!(result.skipped.is_empty());

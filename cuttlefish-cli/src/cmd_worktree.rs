@@ -28,36 +28,27 @@ struct CreateOutput {
 pub fn run_create(name: Option<String>, cwd: Option<String>) {
     let (task_name, working_dir) = if let Some(n) = name {
         (n, cwd.unwrap_or_else(|| ".".to_string()))
+    } else if let Some(input) = read_stdin::<CreateHookInput>() {
+        let n = input.name.unwrap_or_else(|| {
+            eprintln!("error: --name is required");
+            process::exit(1);
+        });
+        let c = input.cwd.unwrap_or_else(|| ".".to_string());
+        (n, c)
     } else {
-        match read_stdin::<CreateHookInput>() {
-            Some(input) => {
-                let n = input.name.unwrap_or_else(|| {
-                    eprintln!("error: --name is required");
-                    process::exit(1);
-                });
-                let c = input.cwd.unwrap_or_else(|| ".".to_string());
-                (n, c)
-            }
-            None => {
-                eprintln!("error: --name is required");
-                process::exit(1);
-            }
-        }
+        eprintln!("error: --name is required");
+        process::exit(1);
     };
 
-    let repo_root = match resolve_repo_root(&working_dir) {
-        Some(p) => p,
-        None => {
-            eprintln!("error: not a git repository: {working_dir}");
-            process::exit(1);
-        }
+    let Some(repo_root) = resolve_repo_root(&working_dir) else {
+        eprintln!("error: not a git repository: {working_dir}");
+        process::exit(1);
     };
 
     let slug = sanitize_slug(&task_name);
     let repo_name = Path::new(&repo_root)
         .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "repo".to_string());
+        .map_or_else(|| "repo".to_string(), |n| n.to_string_lossy().to_string());
 
     let worktree_base = worktree_base_dir(&repo_name);
     let worktree_path = worktree_base.join(&slug);
@@ -107,25 +98,19 @@ pub fn run_create(name: Option<String>, cwd: Option<String>) {
 pub fn run_remove(path: Option<String>, force: bool) {
     let worktree_path = if let Some(p) = path {
         p
+    } else if let Some(input) = read_stdin::<RemoveHookInput>() {
+        input.worktree_path.unwrap_or_else(|| {
+            eprintln!("error: --path is required");
+            process::exit(1);
+        })
     } else {
-        match read_stdin::<RemoveHookInput>() {
-            Some(input) => input.worktree_path.unwrap_or_else(|| {
-                eprintln!("error: --path is required");
-                process::exit(1);
-            }),
-            None => {
-                eprintln!("error: --path is required");
-                process::exit(1);
-            }
-        }
+        eprintln!("error: --path is required");
+        process::exit(1);
     };
 
-    let repo_root = match resolve_repo_root(&worktree_path) {
-        Some(p) => p,
-        None => {
-            eprintln!("error: could not find parent repo for worktree");
-            process::exit(1);
-        }
+    let Some(repo_root) = resolve_repo_root(&worktree_path) else {
+        eprintln!("error: could not find parent repo for worktree");
+        process::exit(1);
     };
 
     let result = if force {
@@ -150,14 +135,24 @@ pub fn sha256_prefix(input: &str) -> String {
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    bytes.iter().fold(String::new(), |mut acc, b| {
+        use std::fmt::Write;
+        let _ = write!(acc, "{b:02x}");
+        acc
+    })
 }
 
 pub fn sanitize_slug(name: &str) -> String {
     let slug: String = name
         .to_lowercase()
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
 
     let mut result = String::new();

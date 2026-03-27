@@ -3,12 +3,9 @@ use std::process;
 
 /// Run `cuttlefish init` — bootstrap a .worktreeinclude file for the repo.
 pub fn run(path: &str, dry_run: bool, show: bool) {
-    let repo_path = match resolve_repo_root(path) {
-        Some(p) => p,
-        None => {
-            eprintln!("error: not a git repository: {path}");
-            process::exit(1);
-        }
+    let Some(repo_path) = resolve_repo_root(path) else {
+        eprintln!("error: not a git repository: {path}");
+        process::exit(1);
     };
 
     if show {
@@ -72,7 +69,11 @@ fn run_show(repo_path: &str) {
                 eprintln!("will hydrate:");
                 for entry in &included {
                     let size_mb = entry.size_bytes / (1024 * 1024);
-                    let exists = if entry.exists_on_disk { "" } else { " (not on disk)" };
+                    let exists = if entry.exists_on_disk {
+                        ""
+                    } else {
+                        " (not on disk)"
+                    };
                     eprintln!("  {} ({}MB){}", entry.path, size_mb, exists);
                 }
             }
@@ -82,7 +83,10 @@ fn run_show(repo_path: &str) {
                 eprintln!("suggestions:");
                 for entry in &suggestions {
                     let size_mb = entry.size_bytes / (1024 * 1024);
-                    eprintln!("  {} ({}MB) — consider adding to .worktreeinclude", entry.path, size_mb);
+                    eprintln!(
+                        "  {} ({}MB) — consider adding to .worktreeinclude",
+                        entry.path, size_mb
+                    );
                 }
             }
         }

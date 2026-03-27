@@ -18,17 +18,10 @@ struct HookEvent {
     session_id: Option<String>,
 }
 
-const WHITELIST: &[&str] = &[
-    ".claude/",
-    "CLAUDE.md",
-    "AGENTS.md",
-];
+const WHITELIST: &[&str] = &[".claude/", "CLAUDE.md", "AGENTS.md"];
 
 pub fn run() {
-    let event = match read_event() {
-        Some(e) => e,
-        None => return,
-    };
+    let Some(event) = read_event() else { return };
 
     let event_name = event.event.as_deref().unwrap_or("");
 
@@ -53,10 +46,7 @@ fn handle_pre_tool_use(event: &HookEvent) {
         .and_then(|v| v.get("file_path").or(v.get("path")))
         .and_then(|v| v.as_str());
 
-    let file_path = match file_path {
-        Some(p) => p,
-        None => return,
-    };
+    let Some(file_path) = file_path else { return };
 
     if is_in_worktree(file_path) {
         return;
@@ -84,8 +74,7 @@ fn handle_pre_tool_use(event: &HookEvent) {
 
     let repo_name = Path::new(&cwd)
         .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "repo".to_string());
+        .map_or_else(|| "repo".to_string(), |n| n.to_string_lossy().to_string());
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     let wt_path = PathBuf::from(&home)
@@ -153,9 +142,8 @@ fn is_in_worktree(file_path: &str) -> bool {
 }
 
 fn is_whitelisted(file_path: &str) -> bool {
-    let repo_root = match resolve_repo_root_from_file(file_path) {
-        Some(r) => r,
-        None => return false,
+    let Some(repo_root) = resolve_repo_root_from_file(file_path) else {
+        return false;
     };
 
     let relative = match Path::new(file_path).strip_prefix(&repo_root) {

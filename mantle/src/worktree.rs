@@ -22,10 +22,10 @@ pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, MantleError>
         .ok()
         .flatten()
         .map(|r| r.name().shorten().to_string());
-    let main_path = repo
-        .workdir()
-        .map(|p: &std::path::Path| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| repo_path.to_owned());
+    let main_path = repo.workdir().map_or_else(
+        || repo_path.to_owned(),
+        |p: &std::path::Path| p.to_string_lossy().to_string(),
+    );
 
     result.push(WorktreeInfo {
         path: main_path,
@@ -94,8 +94,7 @@ pub fn worktree_add_new_branch(
 
     let wt_name = Path::new(path)
         .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| branch.to_owned());
+        .map_or_else(|| branch.to_owned(), |n| n.to_string_lossy().to_string());
 
     repo.worktree(&wt_name, Path::new(path), Some(&opts))
         .map_err(MantleError::internal)?;
@@ -117,8 +116,7 @@ pub fn worktree_add_existing(repo_path: &str, path: &str, branch: &str) -> Resul
 
     let wt_name = Path::new(path)
         .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| branch.to_owned());
+        .map_or_else(|| branch.to_owned(), |n| n.to_string_lossy().to_string());
 
     repo.worktree(&wt_name, Path::new(path), Some(&opts))
         .map_err(MantleError::internal)?;
@@ -210,7 +208,8 @@ mod tests {
         let sig = git2::Signature::now("Test", "test@test.com").unwrap();
         let tree_id = repo.index().unwrap().write_tree().unwrap();
         let tree = repo.find_tree(tree_id).unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[]).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+            .unwrap();
         tmp
     }
 
@@ -228,7 +227,8 @@ mod tests {
         let tmp = init_test_repo();
         let repo_path = tmp.path().to_str().unwrap();
         let wt_path = tmp.path().join("wt1");
-        worktree_add_new_branch(repo_path, wt_path.to_str().unwrap(), "test-branch", "HEAD").unwrap();
+        worktree_add_new_branch(repo_path, wt_path.to_str().unwrap(), "test-branch", "HEAD")
+            .unwrap();
         let result = list_worktrees(repo_path).unwrap();
         assert_eq!(result.len(), 2);
         let linked = result.iter().find(|w| !w.is_main).unwrap();
@@ -240,7 +240,13 @@ mod tests {
         let tmp = init_test_repo();
         let repo_path = tmp.path().to_str().unwrap();
         let wt_path = tmp.path().join("wt-remove");
-        worktree_add_new_branch(repo_path, wt_path.to_str().unwrap(), "remove-branch", "HEAD").unwrap();
+        worktree_add_new_branch(
+            repo_path,
+            wt_path.to_str().unwrap(),
+            "remove-branch",
+            "HEAD",
+        )
+        .unwrap();
         assert!(wt_path.exists());
         worktree_remove_clean(repo_path, wt_path.to_str().unwrap()).unwrap();
         assert!(!wt_path.exists());

@@ -37,7 +37,8 @@ pub fn inject_grants(worktree_path: &str, settings_path: &str) -> Result<(), Str
     }
 
     let mut settings: Value = if path.exists() {
-        let content = fs::read_to_string(path).map_err(|e| format!("failed to read settings: {e}"))?;
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("failed to read settings: {e}"))?;
         serde_json::from_str(&content).unwrap_or_else(|_| json!({}))
     } else {
         json!({})
@@ -82,9 +83,8 @@ mod tests {
 
         inject_grants("/path/to/worktree", settings_path.to_str().unwrap()).unwrap();
 
-        let content: Value = serde_json::from_str(
-            &fs::read_to_string(&settings_path).unwrap()
-        ).unwrap();
+        let content: Value =
+            serde_json::from_str(&fs::read_to_string(&settings_path).unwrap()).unwrap();
 
         let allow = content["permissions"]["allow"].as_array().unwrap();
         assert!(!allow.is_empty());
@@ -105,9 +105,8 @@ mod tests {
 
         inject_grants("/wt", settings_path.to_str().unwrap()).unwrap();
 
-        let content: Value = serde_json::from_str(
-            &fs::read_to_string(&settings_path).unwrap()
-        ).unwrap();
+        let content: Value =
+            serde_json::from_str(&fs::read_to_string(&settings_path).unwrap()).unwrap();
 
         let allow = content["permissions"]["allow"].as_array().unwrap();
         assert!(allow.iter().any(|v| v == "Bash(echo:*)"));
@@ -120,15 +119,13 @@ mod tests {
         let settings_path = tmp.path().join("settings.local.json");
 
         inject_grants("/wt", settings_path.to_str().unwrap()).unwrap();
-        let first: Value = serde_json::from_str(
-            &fs::read_to_string(&settings_path).unwrap()
-        ).unwrap();
+        let first: Value =
+            serde_json::from_str(&fs::read_to_string(&settings_path).unwrap()).unwrap();
         let first_count = first["permissions"]["allow"].as_array().unwrap().len();
 
         inject_grants("/wt", settings_path.to_str().unwrap()).unwrap();
-        let second: Value = serde_json::from_str(
-            &fs::read_to_string(&settings_path).unwrap()
-        ).unwrap();
+        let second: Value =
+            serde_json::from_str(&fs::read_to_string(&settings_path).unwrap()).unwrap();
         let second_count = second["permissions"]["allow"].as_array().unwrap().len();
 
         assert_eq!(first_count, second_count);

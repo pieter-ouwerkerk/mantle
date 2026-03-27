@@ -7,7 +7,11 @@ mod cmd_worktree;
 mod permissions;
 
 #[derive(Parser)]
-#[command(name = "cuttlefish", version, about = "CoW-accelerated git worktree hydration")]
+#[command(
+    name = "cuttlefish",
+    version,
+    about = "CoW-accelerated git worktree hydration"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -45,7 +49,7 @@ enum Commands {
         exclude: Vec<String>,
     },
 
-    /// Manage git worktrees with CoW hydration
+    /// Manage git worktrees with `CoW` hydration
     Worktree {
         #[command(subcommand)]
         action: WorktreeAction,
@@ -76,8 +80,16 @@ enum WorktreeAction {
 fn main() {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Init { path, dry_run, show } => cmd_init::run(&path, dry_run, show),
-        Commands::Hydrate { worktree, source, exclude } => {
+        Commands::Init {
+            path,
+            dry_run,
+            show,
+        } => cmd_init::run(&path, dry_run, show),
+        Commands::Hydrate {
+            worktree,
+            source,
+            exclude,
+        } => {
             cmd_hydrate::run(worktree, source, exclude);
         }
         Commands::Worktree { action } => match action {
