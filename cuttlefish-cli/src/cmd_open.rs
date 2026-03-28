@@ -1,5 +1,3 @@
-#![cfg(feature = "cuttlefish-app")]
-
 use std::process;
 
 use crate::config::Config;
@@ -7,12 +5,9 @@ use crate::socket::{SocketClient, SocketMessage};
 use crate::util::resolve_repo_root;
 
 pub fn run(path: &str, dry_run: bool) {
-    let repo_path = match resolve_repo_root(path) {
-        Some(p) => p,
-        None => {
-            eprintln!("error: not a git repository: {path}");
-            process::exit(1);
-        }
+    let Some(repo_path) = resolve_repo_root(path) else {
+        eprintln!("error: not a git repository: {path}");
+        process::exit(1);
     };
 
     if dry_run {
@@ -69,5 +64,9 @@ fn find_app_mdfind() -> Option<String> {
         .ok()?;
     let path = String::from_utf8_lossy(&output.stdout);
     let first = path.lines().next()?.trim().to_string();
-    if first.is_empty() { None } else { Some(first) }
+    if first.is_empty() {
+        None
+    } else {
+        Some(first)
+    }
 }

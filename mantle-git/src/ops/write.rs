@@ -103,9 +103,11 @@ pub fn delete_ref(repo_path: &str, refname: &str) -> Result<(), GitError> {
 /// Hard reset to a revision (equivalent to `git reset --hard <rev>`).
 pub fn reset_hard(repo_path: &str, rev: &str) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
-    let obj = repo.revparse_single(rev).map_err(|_| GitError::RevNotFound {
-        rev: rev.to_owned(),
-    })?;
+    let obj = repo
+        .revparse_single(rev)
+        .map_err(|_| GitError::RevNotFound {
+            rev: rev.to_owned(),
+        })?;
     repo.reset(&obj, git2::ResetType::Hard, None)
         .map_err(GitError::internal)?;
     Ok(())
@@ -115,9 +117,11 @@ pub fn reset_hard(repo_path: &str, rev: &str) -> Result<(), GitError> {
 /// Moves HEAD but leaves both index and working tree unchanged.
 pub fn reset_soft(repo_path: &str, rev: &str) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
-    let obj = repo.revparse_single(rev).map_err(|_| GitError::RevNotFound {
-        rev: rev.to_owned(),
-    })?;
+    let obj = repo
+        .revparse_single(rev)
+        .map_err(|_| GitError::RevNotFound {
+            rev: rev.to_owned(),
+        })?;
     repo.reset(&obj, git2::ResetType::Soft, None)
         .map_err(GitError::internal)?;
     Ok(())
@@ -127,9 +131,11 @@ pub fn reset_soft(repo_path: &str, rev: &str) -> Result<(), GitError> {
 /// Moves HEAD and resets the index, but leaves the working tree unchanged.
 pub fn reset_mixed(repo_path: &str, rev: &str) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
-    let obj = repo.revparse_single(rev).map_err(|_| GitError::RevNotFound {
-        rev: rev.to_owned(),
-    })?;
+    let obj = repo
+        .revparse_single(rev)
+        .map_err(|_| GitError::RevNotFound {
+            rev: rev.to_owned(),
+        })?;
     repo.reset(&obj, git2::ResetType::Mixed, None)
         .map_err(GitError::internal)?;
     Ok(())
@@ -202,7 +208,8 @@ pub fn stash_apply(repo_path: &str, index: u32) -> Result<(), GitError> {
 /// Drop a stash entry (equivalent to `git stash drop stash@{index}`).
 pub fn stash_drop(repo_path: &str, index: u32) -> Result<(), GitError> {
     let mut repo = open_git2(repo_path)?;
-    repo.stash_drop(index as usize).map_err(GitError::internal)?;
+    repo.stash_drop(index as usize)
+        .map_err(GitError::internal)?;
     Ok(())
 }
 
@@ -330,7 +337,8 @@ pub fn restore_file(repo_path: &str, file_path: &str) -> Result<(), GitError> {
             let mut cb = git2::build::CheckoutBuilder::new();
             cb.force();
             cb.path(file_path);
-            repo.checkout_head(Some(&mut cb)).map_err(GitError::internal)?;
+            repo.checkout_head(Some(&mut cb))
+                .map_err(GitError::internal)?;
         } else {
             // File is untracked (not in HEAD) — remove from disk
             let full_path = std::path::Path::new(repo_path).join(file_path);

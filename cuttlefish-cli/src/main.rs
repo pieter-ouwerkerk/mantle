@@ -6,6 +6,7 @@ mod cmd_init;
 #[cfg(feature = "cuttlefish-app")]
 mod cmd_open;
 mod cmd_worktree;
+#[cfg(feature = "cuttlefish-app")]
 mod config;
 mod permissions;
 #[cfg(feature = "cuttlefish-app")]

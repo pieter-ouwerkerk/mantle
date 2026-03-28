@@ -3,7 +3,11 @@ use git2::Repository;
 use crate::error::GitError;
 use crate::types::ReflogEntry;
 
-pub fn reflog(repo_path: &str, refname: &str, max_count: u32) -> Result<Vec<ReflogEntry>, GitError> {
+pub fn reflog(
+    repo_path: &str,
+    refname: &str,
+    max_count: u32,
+) -> Result<Vec<ReflogEntry>, GitError> {
     let repo = Repository::open(repo_path).map_err(GitError::internal)?;
     let log = repo.reflog(refname).map_err(GitError::internal)?;
 

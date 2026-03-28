@@ -285,13 +285,30 @@ fn format_single_change(
     match change {
         FileChange::Addition { id, mode } => {
             let blob = repo.find_object(*id).map_err(GitError::internal)?;
-            Ok(format_blob_diff(path, None, Some(&blob.data), None, Some(*mode)))
+            Ok(format_blob_diff(
+                path,
+                None,
+                Some(&blob.data),
+                None,
+                Some(*mode),
+            ))
         }
         FileChange::Deletion { id, mode } => {
             let blob = repo.find_object(*id).map_err(GitError::internal)?;
-            Ok(format_blob_diff(path, Some(&blob.data), None, Some(*mode), None))
+            Ok(format_blob_diff(
+                path,
+                Some(&blob.data),
+                None,
+                Some(*mode),
+                None,
+            ))
         }
-        FileChange::Modification { old_id, new_id, old_mode, new_mode } => {
+        FileChange::Modification {
+            old_id,
+            new_id,
+            old_mode,
+            new_mode,
+        } => {
             let old_blob = repo.find_object(*old_id).map_err(GitError::internal)?;
             let new_blob = repo.find_object(*new_id).map_err(GitError::internal)?;
             Ok(format_blob_diff(
@@ -302,7 +319,14 @@ fn format_single_change(
                 Some(*new_mode),
             ))
         }
-        FileChange::Rename { old_path, old_id, new_id, old_mode, new_mode, similarity } => {
+        FileChange::Rename {
+            old_path,
+            old_id,
+            new_id,
+            old_mode,
+            new_mode,
+            similarity,
+        } => {
             let old_blob = repo.find_object(*old_id).map_err(GitError::internal)?;
             let new_blob = repo.find_object(*new_id).map_err(GitError::internal)?;
             Ok(format_rename_diff(
@@ -328,10 +352,7 @@ const RENAME_THRESHOLD: u32 = 50;
 /// Match deletions against additions by content similarity. Matched pairs are
 /// replaced in-place with `FileChange::Rename`. Uses exact-match (by OID)
 /// first, then falls back to line-level similarity for the remainder.
-fn detect_renames(
-    repo: &gix::Repository,
-    diffs: &mut Vec<(String, FileChange)>,
-) {
+fn detect_renames(repo: &gix::Repository, diffs: &mut Vec<(String, FileChange)>) {
     // Collect indices of deletions and additions
     let deletions: Vec<usize> = diffs
         .iter()
@@ -680,9 +701,13 @@ fn collect_wt_entry(
             let new_blob = repo.find_object(id).map_err(GitError::internal)?;
             let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
             entries.push(WtEntry {
-                path, old_path: None, old_data,
+                path,
+                old_path: None,
+                old_data,
                 new_data: Some(new_blob.data.clone()),
-                old_mode, new_mode: Some(0o100_644), similarity: None,
+                old_mode,
+                new_mode: Some(0o100_644),
+                similarity: None,
             });
         }
         Item::IndexWorktree(ref iw_item) => {
@@ -705,24 +730,38 @@ fn collect_wt_iw_entry(
     use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
 
     match iw_item {
-        index_worktree::Item::Modification { rela_path, status, .. } => {
+        index_worktree::Item::Modification {
+            rela_path, status, ..
+        } => {
             let path = rela_path.to_str_lossy().to_string();
             match status {
                 EntryStatus::Change(Change::Removed) => {
                     let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
                     entries.push(WtEntry {
-                        path, old_path: None, old_data, new_data: None,
-                        old_mode, new_mode: None, similarity: None,
+                        path,
+                        old_path: None,
+                        old_data,
+                        new_data: None,
+                        old_mode,
+                        new_mode: None,
+                        similarity: None,
                     });
                 }
                 EntryStatus::Change(
-                    Change::Modification { .. } | Change::SubmoduleModification(_) | Change::Type { .. },
+                    Change::Modification { .. }
+                    | Change::SubmoduleModification(_)
+                    | Change::Type { .. },
                 ) => {
                     let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
                     let new_data = std::fs::read(work_dir.join(&path)).ok();
                     entries.push(WtEntry {
-                        path, old_path: None, old_data, new_data,
-                        old_mode, new_mode: Some(0o100_644), similarity: None,
+                        path,
+                        old_path: None,
+                        old_data,
+                        new_data,
+                        old_mode,
+                        new_mode: Some(0o100_644),
+                        similarity: None,
                     });
                 }
                 _ => {}
@@ -733,8 +772,13 @@ fn collect_wt_iw_entry(
                 let path = entry.rela_path.to_str_lossy().to_string();
                 let new_data = std::fs::read(work_dir.join(&path)).ok();
                 entries.push(WtEntry {
-                    path, old_path: None, old_data: None, new_data,
-                    old_mode: None, new_mode: Some(0o100_644), similarity: None,
+                    path,
+                    old_path: None,
+                    old_data: None,
+                    new_data,
+                    old_mode: None,
+                    new_mode: Some(0o100_644),
+                    similarity: None,
                 });
             }
         }
@@ -747,7 +791,8 @@ fn format_wt_entries(entries: &[WtEntry]) -> String {
     for entry in entries {
         let diff_text = if let (Some(old_path), Some(sim)) = (&entry.old_path, entry.similarity) {
             format_rename_diff(
-                old_path, &entry.path,
+                old_path,
+                &entry.path,
                 entry.old_data.as_deref().unwrap_or(b""),
                 entry.new_data.as_deref().unwrap_or(b""),
                 sim,
@@ -756,8 +801,11 @@ fn format_wt_entries(entries: &[WtEntry]) -> String {
             )
         } else {
             format_blob_diff(
-                &entry.path, entry.old_data.as_deref(), entry.new_data.as_deref(),
-                entry.old_mode, entry.new_mode,
+                &entry.path,
+                entry.old_data.as_deref(),
+                entry.new_data.as_deref(),
+                entry.old_mode,
+                entry.new_mode,
             )
         };
         if !diff_text.is_empty() {
@@ -856,12 +904,21 @@ pub fn working_tree_diff_for_context(repo_path: &str) -> Result<String, GitError
     for item in iter {
         let item = item.map_err(GitError::internal)?;
         collect_context_item(
-            item, &repo, head_tree.as_ref(), &work_dir,
-            &mut staged, &mut unstaged, &mut untracked_files,
+            item,
+            &repo,
+            head_tree.as_ref(),
+            &work_dir,
+            &mut staged,
+            &mut unstaged,
+            &mut untracked_files,
         )?;
     }
 
-    Ok(format_context_sections(&staged, &unstaged, &untracked_files))
+    Ok(format_context_sections(
+        &staged,
+        &unstaged,
+        &untracked_files,
+    ))
 }
 
 fn collect_context_item(
@@ -889,29 +946,49 @@ fn collect_context_item(
                 format_blob_diff(&path, old_data.as_deref(), None, old_mode, None)
             } else {
                 let new_blob = repo.find_object(id).map_err(GitError::internal)?;
-                format_blob_diff(&path, old_data.as_deref(), Some(&new_blob.data), old_mode, Some(0o100_644))
+                format_blob_diff(
+                    &path,
+                    old_data.as_deref(),
+                    Some(&new_blob.data),
+                    old_mode,
+                    Some(0o100_644),
+                )
             };
-            if !diff_text.is_empty() { staged.push_str(&diff_text); }
+            if !diff_text.is_empty() {
+                staged.push_str(&diff_text);
+            }
         }
         Item::IndexWorktree(ref iw_item) => match iw_item {
-            index_worktree::Item::Modification { rela_path, status, .. } => {
+            index_worktree::Item::Modification {
+                rela_path, status, ..
+            } => {
                 let path = rela_path.to_str_lossy().to_string();
                 match status {
                     EntryStatus::Change(Change::Removed) => {
                         let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
-                        let diff_text = format_blob_diff(&path, old_data.as_deref(), None, old_mode, None);
-                        if !diff_text.is_empty() { unstaged.push_str(&diff_text); }
+                        let diff_text =
+                            format_blob_diff(&path, old_data.as_deref(), None, old_mode, None);
+                        if !diff_text.is_empty() {
+                            unstaged.push_str(&diff_text);
+                        }
                     }
                     EntryStatus::Change(
-                        Change::Modification { .. } | Change::SubmoduleModification(_) | Change::Type { .. },
+                        Change::Modification { .. }
+                        | Change::SubmoduleModification(_)
+                        | Change::Type { .. },
                     ) => {
                         let index_data = index_blob_for_path(repo, &path);
                         let new_data = std::fs::read(work_dir.join(&path)).ok();
                         let diff_text = format_blob_diff(
-                            &path, index_data.as_deref(), new_data.as_deref(),
-                            Some(0o100_644), Some(0o100_644),
+                            &path,
+                            index_data.as_deref(),
+                            new_data.as_deref(),
+                            Some(0o100_644),
+                            Some(0o100_644),
                         );
-                        if !diff_text.is_empty() { unstaged.push_str(&diff_text); }
+                        if !diff_text.is_empty() {
+                            unstaged.push_str(&diff_text);
+                        }
                     }
                     _ => {}
                 }

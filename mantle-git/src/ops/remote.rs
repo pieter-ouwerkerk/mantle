@@ -33,7 +33,9 @@ fn ensure_ssh_auth_sock() {
             let trimmed = line.trim();
             if trimmed.starts_with("IdentityAgent") {
                 // Handle quoted or unquoted paths
-                let raw = trimmed.split_once(char::is_whitespace).map_or("", |(_, r)| r);
+                let raw = trimmed
+                    .split_once(char::is_whitespace)
+                    .map_or("", |(_, r)| r);
                 let path = raw.trim().trim_matches('"');
                 let expanded = path.replace("~/", &format!("{home}/"));
                 if std::path::Path::new(&expanded).exists() {

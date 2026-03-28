@@ -114,9 +114,11 @@ pub fn create_tag(
 pub fn delete_tag(repo_path: &str, name: &str) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
     let refname = format!("refs/tags/{name}");
-    let mut reference = repo.find_reference(&refname).map_err(|_| GitError::Internal {
-        message: format!("tag '{name}' not found"),
-    })?;
+    let mut reference = repo
+        .find_reference(&refname)
+        .map_err(|_| GitError::Internal {
+            message: format!("tag '{name}' not found"),
+        })?;
     reference.delete().map_err(GitError::internal)?;
     Ok(())
 }

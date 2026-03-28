@@ -36,13 +36,37 @@ fn tree_index_entry(change: gix::diff::index::ChangeRef<'_, '_>) -> StatusEntry 
     let (path_bstr, _idx, _mode, _id) = change.fields();
     let path = path_bstr.to_str_lossy().to_string();
     match change {
-        TIChange::Addition { .. } => StatusEntry { index_code: 'A', worktree_code: ' ', path, orig_path: None },
-        TIChange::Deletion { .. } => StatusEntry { index_code: 'D', worktree_code: ' ', path, orig_path: None },
-        TIChange::Modification { .. } => StatusEntry { index_code: 'M', worktree_code: ' ', path, orig_path: None },
-        TIChange::Rewrite { source_location, copy, .. } => {
+        TIChange::Addition { .. } => StatusEntry {
+            index_code: 'A',
+            worktree_code: ' ',
+            path,
+            orig_path: None,
+        },
+        TIChange::Deletion { .. } => StatusEntry {
+            index_code: 'D',
+            worktree_code: ' ',
+            path,
+            orig_path: None,
+        },
+        TIChange::Modification { .. } => StatusEntry {
+            index_code: 'M',
+            worktree_code: ' ',
+            path,
+            orig_path: None,
+        },
+        TIChange::Rewrite {
+            source_location,
+            copy,
+            ..
+        } => {
             let orig = source_location.to_str_lossy().to_string();
             let code = if copy { 'C' } else { 'R' };
-            StatusEntry { index_code: code, worktree_code: ' ', path, orig_path: Some(orig) }
+            StatusEntry {
+                index_code: code,
+                worktree_code: ' ',
+                path,
+                orig_path: Some(orig),
+            }
         }
     }
 }

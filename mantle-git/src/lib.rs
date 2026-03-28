@@ -12,7 +12,6 @@ pub use error::GitError;
 pub use types::MergeStateKind;
 pub use types::*;
 
-
 // MARK: - Artifact operations
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
@@ -55,7 +54,10 @@ pub fn bootstrap_worktreeinclude(repo_path: String) -> Result<GeneratedWorktreei
 // MARK: - CoW operations
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn cow_clone_directory(source: String, destination: String) -> Result<CowCloneResult, GitError> {
+pub fn cow_clone_directory(
+    source: String,
+    destination: String,
+) -> Result<CowCloneResult, GitError> {
     ops::cow::cow_clone_directory(&source, &destination)
 }
 
@@ -77,7 +79,11 @@ pub fn worktree_add_new_branch(
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn worktree_add_existing(repo_path: String, path: String, branch: String) -> Result<(), GitError> {
+pub fn worktree_add_existing(
+    repo_path: String,
+    path: String,
+    branch: String,
+) -> Result<(), GitError> {
     ops::worktree::worktree_add_existing(&repo_path, &path, &branch)
 }
 
@@ -99,7 +105,10 @@ pub fn worktree_remove_force(repo_path: String, path: String) -> Result<(), GitE
 // MARK: - Blame operations
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn git_blame_file(repo_path: String, file_path: String) -> Result<Vec<BlameLineInfo>, GitError> {
+pub fn git_blame_file(
+    repo_path: String,
+    file_path: String,
+) -> Result<Vec<BlameLineInfo>, GitError> {
     ops::blame::blame_file(&repo_path, &file_path)
 }
 
@@ -200,7 +209,10 @@ pub fn git_branch_is_merged(
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn git_latest_commit_date(repo_path: String, branch: String) -> Result<Option<String>, GitError> {
+pub fn git_latest_commit_date(
+    repo_path: String,
+    branch: String,
+) -> Result<Option<String>, GitError> {
     ops::branch::latest_commit_date(&repo_path, &branch)
 }
 
@@ -229,7 +241,10 @@ pub fn git_is_valid_repo(path: String) -> bool {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn git_rev_list_parents(repo_path: String, commit_hash: String) -> Result<Vec<String>, GitError> {
+pub fn git_rev_list_parents(
+    repo_path: String,
+    commit_hash: String,
+) -> Result<Vec<String>, GitError> {
     ops::refs::rev_list_parents(&repo_path, &commit_hash)
 }
 

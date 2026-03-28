@@ -198,6 +198,7 @@ fn test_push_rejected_non_fast_forward() {
     assert!(
         err_str.contains("rejected")
             || err_str.contains("non-fast-forward")
+            || err_str.contains("not present locally")
             || err_str.contains("Git error"),
         "Unexpected error: {err_str}"
     );

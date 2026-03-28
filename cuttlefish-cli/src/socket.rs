@@ -1,17 +1,11 @@
-#![cfg(feature = "cuttlefish-app")]
-
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::Config;
-
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(5);
-const LAUNCH_TIMEOUT: Duration = Duration::from_secs(8);
-const LAUNCH_POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 pub struct SocketClient {
     reader: BufReader<UnixStream>,
@@ -63,10 +57,6 @@ impl SocketMessage {
 #[derive(Debug, Deserialize)]
 pub struct SocketResponse {
     pub ok: Option<bool>,
-    pub error: Option<String>,
-    #[serde(rename = "worktreePath")]
-    pub worktree_path: Option<String>,
-    pub branch: Option<String>,
 }
 
 impl SocketClient {
@@ -83,21 +73,6 @@ impl SocketClient {
         })
     }
 
-    pub fn connect_or_launch() -> Option<Self> {
-        if let Some(client) = Self::connect() {
-            return Some(client);
-        }
-        launch_app();
-        let start = Instant::now();
-        while start.elapsed() < LAUNCH_TIMEOUT {
-            std::thread::sleep(LAUNCH_POLL_INTERVAL);
-            if let Some(client) = Self::connect() {
-                return Some(client);
-            }
-        }
-        None
-    }
-
     pub fn send(&mut self, msg: &mut SocketMessage) -> Option<SocketResponse> {
         let id = format!("r{}", self.next_id);
         self.next_id += 1;
@@ -112,13 +87,12 @@ impl SocketClient {
         loop {
             line.clear();
             match self.reader.read_line(&mut line) {
-                Ok(0) => return None,
+                Ok(0) | Err(_) => return None,
                 Ok(_) => {
                     if let Ok(resp) = serde_json::from_str::<SocketResponse>(&line) {
                         return Some(resp);
                     }
                 }
-                Err(_) => return None,
             }
         }
     }
@@ -139,38 +113,4 @@ impl SocketClient {
 fn socket_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home).join(".cuttlefish/cuttlefish.sock")
-}
-
-fn launch_app() {
-    let config = Config::load();
-
-    if let Some(app_path) = &config.app_path {
-        let _ = std::process::Command::new("/usr/bin/open")
-            .arg("-a")
-            .arg(app_path)
-            .output();
-        return;
-    }
-
-    if let Ok(output) = std::process::Command::new("/usr/bin/mdfind")
-        .args(["kMDItemCFBundleIdentifier == 'com.pieterouwerkerk.cuttlefish'"])
-        .output()
-    {
-        let path = String::from_utf8_lossy(&output.stdout);
-        if let Some(first) = path.lines().next() {
-            let first = first.trim();
-            if !first.is_empty() {
-                let _ = std::process::Command::new("/usr/bin/open")
-                    .arg("-a")
-                    .arg(first)
-                    .output();
-                return;
-            }
-        }
-    }
-
-    let _ = std::process::Command::new("/usr/bin/open")
-        .arg("-b")
-        .arg("com.pieterouwerkerk.cuttlefish")
-        .output();
 }

@@ -6,11 +6,11 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::cmd_worktree;
-use crate::util::{resolve_repo_root, resolve_repo_root_from_file};
 #[cfg(feature = "cuttlefish-app")]
 use crate::config::Config;
 #[cfg(feature = "cuttlefish-app")]
 use crate::socket::{SocketClient, SocketMessage};
+use crate::util::{resolve_repo_root, resolve_repo_root_from_file};
 
 #[derive(Deserialize)]
 struct HookEvent {
@@ -21,7 +21,9 @@ struct HookEvent {
     #[serde(alias = "tool_input")]
     tool_input: Option<serde_json::Value>,
     session_id: Option<String>,
+    #[cfg(feature = "cuttlefish-app")]
     model: Option<String>,
+    #[cfg(feature = "cuttlefish-app")]
     cwd: Option<String>,
 }
 
@@ -212,24 +214,30 @@ fn read_event() -> Option<HookEvent> {
 
 #[cfg(feature = "cuttlefish-app")]
 fn handle_session_event(event: &HookEvent) {
-    let Some(mut client) = SocketClient::connect() else { return };
+    let Some(mut client) = SocketClient::connect() else {
+        return;
+    };
     let mut msg = SocketMessage::new("hook_event");
-    msg.hook_event_name = event.event.clone();
-    msg.hook_session_id = event.session_id.clone();
-    msg.hook_model = event.model.clone();
-    msg.path = event.cwd.clone();
+    msg.hook_event_name.clone_from(&event.event);
+    msg.hook_session_id.clone_from(&event.session_id);
+    msg.hook_model.clone_from(&event.model);
+    msg.path.clone_from(&event.cwd);
     client.send_fire_and_forget(&mut msg);
 }
 
 #[cfg(feature = "cuttlefish-app")]
 fn handle_post_tool_use(event: &HookEvent) {
-    let Some(mut client) = SocketClient::connect() else { return };
+    let Some(mut client) = SocketClient::connect() else {
+        return;
+    };
     let mut msg = SocketMessage::new("hook_event");
     msg.hook_event_name = Some("PostToolUse".to_string());
-    msg.hook_session_id = event.session_id.clone();
-    msg.hook_tool_name = event.tool_name.clone();
-    msg.path = event.cwd.clone();
-    msg.file_path = event.tool_input.as_ref()
+    msg.hook_session_id.clone_from(&event.session_id);
+    msg.hook_tool_name.clone_from(&event.tool_name);
+    msg.path.clone_from(&event.cwd);
+    msg.file_path = event
+        .tool_input
+        .as_ref()
         .and_then(|v| v.get("file_path").or(v.get("path")))
         .and_then(|v| v.as_str())
         .map(String::from);
@@ -240,7 +248,8 @@ fn handle_post_tool_use(event: &HookEvent) {
 fn try_briefing_nudge(event: &HookEvent) {
     let session_id = event.session_id.as_deref().unwrap_or("unknown");
     let hash = crate::cmd_worktree::sha256_prefix(session_id);
-    let nudge_file = std::path::PathBuf::from("/tmp").join(format!("cuttlefish-briefing-nudged-{hash}"));
+    let nudge_file =
+        std::path::PathBuf::from("/tmp").join(format!("cuttlefish-briefing-nudged-{hash}"));
 
     if nudge_file.exists() {
         return;
@@ -258,5 +267,7 @@ fn try_briefing_nudge(event: &HookEvent) {
         println!("{response}");
         std::process::exit(0);
     }
-    eprintln!("hint: consider using get_task_briefing MCP tool instead of Explore for faster context");
+    eprintln!(
+        "hint: consider using get_task_briefing MCP tool instead of Explore for faster context"
+    );
 }

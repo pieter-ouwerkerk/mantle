@@ -9,9 +9,11 @@ pub fn is_valid_repo(path: &str) -> bool {
 pub fn rev_parse(repo_path: &str, rev: &str) -> Result<String, GitError> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
-    let object = repo.rev_parse_single(rev).map_err(|_| GitError::RevNotFound {
-        rev: rev.to_owned(),
-    })?;
+    let object = repo
+        .rev_parse_single(rev)
+        .map_err(|_| GitError::RevNotFound {
+            rev: rev.to_owned(),
+        })?;
     Ok(object.detach().to_hex().to_string())
 }
 
@@ -114,15 +116,23 @@ pub fn commit_tree_and_refs(
 }
 
 /// Get ahead/behind counts between two arbitrary refs.
-pub fn ahead_behind(repo_path: &str, ref1: &str, ref2: &str) -> Result<AheadBehindResult, GitError> {
+pub fn ahead_behind(
+    repo_path: &str,
+    ref1: &str,
+    ref2: &str,
+) -> Result<AheadBehindResult, GitError> {
     let repo = git2::Repository::open(repo_path).map_err(GitError::internal)?;
 
-    let obj1 = repo.revparse_single(ref1).map_err(|_| GitError::RevNotFound {
-        rev: ref1.to_owned(),
-    })?;
-    let obj2 = repo.revparse_single(ref2).map_err(|_| GitError::RevNotFound {
-        rev: ref2.to_owned(),
-    })?;
+    let obj1 = repo
+        .revparse_single(ref1)
+        .map_err(|_| GitError::RevNotFound {
+            rev: ref1.to_owned(),
+        })?;
+    let obj2 = repo
+        .revparse_single(ref2)
+        .map_err(|_| GitError::RevNotFound {
+            rev: ref2.to_owned(),
+        })?;
 
     let (ahead, behind) = repo
         .graph_ahead_behind(obj1.id(), obj2.id())

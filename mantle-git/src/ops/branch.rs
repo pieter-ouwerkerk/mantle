@@ -85,7 +85,11 @@ pub fn verify_branch_exists(repo_path: &str, branch: &str) -> Result<bool, GitEr
 
 /// Check whether `branch` is fully merged into `target_branch`.
 /// Returns true if `target_branch`'s tip is a descendant of (or equal to) `branch`'s tip.
-pub fn branch_is_merged(repo_path: &str, branch: &str, target_branch: &str) -> Result<bool, GitError> {
+pub fn branch_is_merged(
+    repo_path: &str,
+    branch: &str,
+    target_branch: &str,
+) -> Result<bool, GitError> {
     let repo = git2::Repository::open(repo_path).map_err(GitError::internal)?;
 
     let branch_ref = format!("refs/heads/{branch}");
@@ -186,7 +190,9 @@ pub fn latest_commit_date(repo_path: &str, branch: &str) -> Result<Option<String
         return Ok(None);
     };
 
-    let peeled = reference.into_fully_peeled_id().map_err(GitError::internal)?;
+    let peeled = reference
+        .into_fully_peeled_id()
+        .map_err(GitError::internal)?;
     let object = peeled.object().map_err(GitError::internal)?;
     let commit = object.try_into_commit().map_err(GitError::internal)?;
     let sig = commit.author().map_err(GitError::internal)?;

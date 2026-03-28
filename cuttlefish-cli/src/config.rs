@@ -5,7 +5,6 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, Default)]
 pub struct Config {
     pub app_path: Option<String>,
-    pub worktree_enforcement_mode: Option<String>,
     pub briefing_nudge_mode: Option<String>,
 }
 
@@ -16,10 +15,6 @@ impl Config {
             Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
             Err(_) => Self::default(),
         }
-    }
-
-    pub fn enforcement_mode(&self) -> &str {
-        self.worktree_enforcement_mode.as_deref().unwrap_or("enforce")
     }
 
     pub fn nudge_mode(&self) -> &str {
@@ -39,17 +34,19 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
-        assert_eq!(config.enforcement_mode(), "enforce");
         assert_eq!(config.nudge_mode(), "guide");
         assert!(config.app_path.is_none());
     }
 
     #[test]
     fn test_parse_config() {
-        let json = r#"{"app_path": "/Applications/Cuttlefish.app", "worktree_enforcement_mode": "guide"}"#;
+        let json =
+            r#"{"app_path": "/Applications/Cuttlefish.app", "briefing_nudge_mode": "enforce"}"#;
         let config: Config = serde_json::from_str(json).unwrap();
-        assert_eq!(config.app_path.as_deref(), Some("/Applications/Cuttlefish.app"));
-        assert_eq!(config.enforcement_mode(), "guide");
-        assert_eq!(config.nudge_mode(), "guide");
+        assert_eq!(
+            config.app_path.as_deref(),
+            Some("/Applications/Cuttlefish.app")
+        );
+        assert_eq!(config.nudge_mode(), "enforce");
     }
 }
