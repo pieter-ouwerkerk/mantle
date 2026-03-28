@@ -1,5 +1,5 @@
 [package]
-name = "mantle"
+name = "mantle-git"
 version = "0.1.0"
 edition = "2021"
 description = "CoW-accelerated git worktree hydration"
@@ -31,4 +31,5 @@ tempfile = "3"
 workspace = true
 
 [lib]
-name = "mantle"
+name = "mantle_git"
+crate-type = ["lib", "staticlib", "cdylib"]

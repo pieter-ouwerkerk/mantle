@@ -61,12 +61,12 @@ pub fn run_create(name: Option<String>, cwd: Option<String>) {
 
     let wt_str = worktree_path.to_string_lossy().to_string();
 
-    if let Err(e) = mantle::worktree_add_new_branch(&repo_root, &wt_str, &branch, "HEAD") {
+    if let Err(e) = mantle_git::worktree_add_new_branch(&repo_root, &wt_str, &branch, "HEAD") {
         eprintln!("error: failed to create worktree: {e}");
         process::exit(1);
     }
 
-    match mantle::hydrate(&repo_root, &wt_str, &[]) {
+    match mantle_git::hydrate(&repo_root, &wt_str, &[]) {
         Ok(result) => {
             if !result.cloned.is_empty() {
                 eprintln!("hydrated {} directories", result.cloned.len());
@@ -114,9 +114,9 @@ pub fn run_remove(path: Option<String>, force: bool) {
     };
 
     let result = if force {
-        mantle::worktree_remove_force(&repo_root, &worktree_path)
+        mantle_git::worktree_remove_force(&repo_root, &worktree_path)
     } else {
-        mantle::worktree_remove_clean(&repo_root, &worktree_path)
+        mantle_git::worktree_remove_clean(&repo_root, &worktree_path)
     };
 
     if let Err(e) = result {

@@ -91,12 +91,12 @@ fn handle_pre_tool_use(event: &HookEvent) {
         return;
     }
 
-    if let Err(e) = mantle::worktree_add_new_branch(&cwd, &wt_str, &branch, "HEAD") {
+    if let Err(e) = mantle_git::worktree_add_new_branch(&cwd, &wt_str, &branch, "HEAD") {
         eprintln!("error: failed to create worktree: {e}");
         return;
     }
 
-    let _ = mantle::hydrate(&cwd, &wt_str, &[]);
+    let _ = mantle_git::hydrate(&cwd, &wt_str, &[]);
 
     let settings_path = wt_path.join(".claude").join("settings.local.json");
     let _ = crate::permissions::inject_grants(&wt_str, &settings_path.to_string_lossy());

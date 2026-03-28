@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::time::Instant;
 
-use crate::artifacts::scan_worktreeinclude;
-use crate::cow::cow_clone_directory;
+use crate::ops::artifacts::scan_worktreeinclude;
+use crate::ops::cow::cow_clone_directory;
 use crate::error::MantleError;
 use crate::types::{HydrationResult, HydrationStrategy};
 

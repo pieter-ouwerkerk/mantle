@@ -32,7 +32,7 @@ pub fn run(worktree: Option<String>, source: Option<String>, exclude: Vec<String
 
     let repo_path = resolve_repo_root(&source_path).unwrap_or(source_path);
 
-    match mantle::hydrate(&repo_path, &worktree_path, &exclude_list) {
+    match mantle_git::hydrate(&repo_path, &worktree_path, &exclude_list) {
         Ok(result) => {
             println!("{}", serde_json::to_string_pretty(&result).unwrap());
         }
