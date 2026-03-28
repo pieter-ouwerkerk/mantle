@@ -10,9 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger CLI release in cuttlefish-releases
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
         run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.RELEASE_DISPATCH_TOKEN }}" \
-            https://api.github.com/repos/pieter-ouwerkerk/cuttlefish-releases/dispatches \
-            -d '{"event_type":"cli-release","client_payload":{"tag":"${{ github.ref_name }}"}}'
+          gh workflow run cli-release.yml \
+            --repo pieter-ouwerkerk/cuttlefish-releases \
+            -f tag="${GITHUB_REF_NAME}"
