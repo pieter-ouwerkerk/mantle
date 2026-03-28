@@ -22,6 +22,9 @@ pub enum ArtifactType {
 pub enum HydrationStrategy {
     CowClone,
     DelegateToPnpm,
+    /// Reserved for future use. Originally intended for sccache injection into
+    /// Rust `target/` directories, but CoW clone handles all artifact types
+    /// (including Rust) effectively. Currently never returned by `resolve_strategy()`.
     InjectCache,
     Skip,
 }
@@ -94,9 +97,13 @@ pub struct EffectiveWorktreeinclude {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GeneratedWorktreeinclude {
+    /// The generated file content, ready to write to `.worktreeinclude`.
     pub content: String,
+    /// Directory names included from built-in artifact specs.
     pub builtin_dirs: Vec<String>,
+    /// Directory names included from `.gitignore` parsing.
     pub gitignore_dirs: Vec<String>,
+    /// Whether a `.worktreeinclude` file already existed (content is still generated but not written).
     pub already_exists: bool,
 }
 
@@ -114,4 +121,151 @@ pub struct HydrationResult {
     pub skipped: Vec<String>,
     pub errors: Vec<String>,
     pub elapsed_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CommitInfo {
+    pub hash: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub committer_name: String,
+    pub committer_email: String,
+    pub author_date: String,
+    pub message: String,
+    pub parent_hashes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BranchInfo {
+    pub name: String,
+    pub date: String,
+    pub author: String,
+    pub hash: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StatusSummary {
+    pub file_count: u32,
+    pub output: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorktreeStatusInfo {
+    pub is_dirty: bool,
+    pub file_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoteInfo {
+    pub name: String,
+    pub push_url: Option<String>,
+    pub fetch_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FetchResult {
+    pub updated_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PushResult {
+    pub updated_ref: Option<String>,
+    pub up_to_date: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PullResult {
+    pub fetch_updated_refs: Vec<String>,
+    pub merge_type: String,
+    pub new_head: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AheadBehindResult {
+    pub ahead: u32,
+    pub behind: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CommitTreeRefsInfo {
+    pub tree_hash: String,
+    pub refs: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BlameLineInfo {
+    pub commit_hash: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub author_date: String,
+    pub line_number: u32,
+    pub num_lines: u32,
+    pub original_line_number: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RewriteResult {
+    pub new_head: String,
+    pub backup_ref: String,
+    pub rewritten_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CommitMetadataInfo {
+    pub author_name: String,
+    pub author_email: String,
+    pub committer_name: String,
+    pub committer_email: String,
+    pub author_date: String,
+    pub committer_date: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StashEntry {
+    pub index: u32,
+    pub message: String,
+    pub commit_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TagInfo {
+    pub name: String,
+    pub target_hash: String,
+    pub is_annotated: bool,
+    pub tagger_name: Option<String>,
+    pub tagger_email: Option<String>,
+    pub tagger_date: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReflogEntry {
+    pub id: String,
+    pub previous_id: String,
+    pub message: String,
+    pub committer: String,
+    pub date: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum MergeStateKind {
+    None,
+    Merge,
+    Rebase,
+    CherryPick,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MergeStateInfo {
+    pub kind: MergeStateKind,
+    pub conflict_count: u32,
+    pub branch: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConflictSides {
+    pub path: String,
+    pub base: Option<String>,
+    pub ours: Option<String>,
+    pub theirs: Option<String>,
 }

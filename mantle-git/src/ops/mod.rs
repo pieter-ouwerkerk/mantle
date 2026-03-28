@@ -1,3 +1,17 @@
 pub mod artifacts;
+pub mod blame;
+pub mod blob;
+pub mod branch;
+pub mod config;
 pub mod cow;
+pub mod diff;
+pub mod log;
+pub mod merge;
+pub mod reflog;
+pub mod refs;
+pub mod remote;
+pub mod rewrite;
+pub mod status;
+pub mod tag;
 pub mod worktree;
+pub mod write;

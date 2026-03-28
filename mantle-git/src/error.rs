@@ -9,44 +9,44 @@ pub enum Error {
     #[error("Revision not found: {rev}")]
     RevNotFound { rev: String },
 
-    #[error("Working tree has uncommitted changes")]
-    WorkingTreeDirty,
+    #[error("Config key not found: {key}")]
+    ConfigNotFound { key: String },
 
-    #[error("Config not found: {path}")]
-    ConfigNotFound { path: String },
+    #[error("Authentication failed for remote: {url}")]
+    AuthenticationFailed { url: String },
 
-    #[error("Authentication failed")]
-    AuthenticationFailed,
-
-    #[error("Push rejected")]
-    PushRejected,
+    #[error("Push rejected: {reason}")]
+    PushRejected { reason: String },
 
     #[error("Remote not found: {name}")]
     RemoteNotFound { name: String },
 
-    #[error("Merge conflict")]
-    MergeConflict,
+    #[error("Merge conflict: {message}")]
+    MergeConflict { message: String },
 
-    #[error("Detached HEAD state")]
+    #[error("Detached HEAD: cannot rewrite without a branch")]
     DetachedHead,
 
-    #[error("Operation in progress")]
+    #[error("Working tree has uncommitted changes")]
+    WorkingTreeDirty,
+
+    #[error("A git operation is already in progress")]
     OperationInProgress,
 
-    #[error("Merge commit unsupported")]
-    MergeCommitUnsupported,
+    #[error("Merge commit cannot be rewritten: {hash}")]
+    MergeCommitUnsupported { hash: String },
 
-    #[error("Cherry-pick conflict")]
-    CherryPickConflict,
+    #[error("Cherry-pick conflict at commit {hash}: {details}")]
+    CherryPickConflict { hash: String, details: String },
 
-    #[error("Cherry-pick empty")]
-    CherryPickEmpty,
+    #[error("Cherry-pick produced no changes — commit {hash} is already applied")]
+    CherryPickEmpty { hash: String },
 
-    #[error("Commit not in chain")]
-    CommitNotInChain,
+    #[error("Commit not found in current branch history: {hash}")]
+    CommitNotInChain { hash: String },
 
-    #[error("Stash pop failed")]
-    StashPopFailed,
+    #[error("Stash pop failed after rewrite: {message}")]
+    StashPopFailed { message: String },
 
     #[error("{message}")]
     Internal { message: String },
