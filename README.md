@@ -116,6 +116,15 @@ mantle includes a hook handler for AI coding agents. Add to your `.claude/settin
 
 This automatically creates worktrees when an agent tries to edit files in your main working tree, redirecting edits to an isolated worktree.
 
+## Naming
+
+The crate names follow cuttlefish anatomy:
+
+- **mantle** (this repo) — the mantle is the body of the cuttlefish. It contains everything.
+- **mantle-git** — the core body of git operations.
+- **lamella** — the thin layers within the cuttlebone. CoW cloning creates zero-cost layers of build artifacts, just like lamellae.
+- **cuttlefish** (the CLI) — the whole organism. What you interact with.
+
 ## License
 
 Licensed under either of:
