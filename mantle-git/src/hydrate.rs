@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use crate::ops::artifacts::scan_worktreeinclude;
 use crate::ops::cow::cow_clone_directory;
-use crate::error::MantleError;
+use crate::error::Error;
 use crate::types::{HydrationResult, HydrationStrategy};
 
 /// Hydrate a worktree by CoW-cloning build artifacts from the source repo.
@@ -14,7 +14,7 @@ pub fn hydrate(
     repo_path: &str,
     worktree_path: &str,
     exclude: &[String],
-) -> Result<HydrationResult, MantleError> {
+) -> Result<HydrationResult, Error> {
     let start = Instant::now();
 
     let scan_result = scan_worktreeinclude(repo_path, worktree_path, true)?;

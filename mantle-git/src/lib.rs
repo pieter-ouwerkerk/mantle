@@ -4,7 +4,7 @@ mod ops;
 mod repo;
 mod types;
 
-pub use error::MantleError;
+pub use error::Error;
 pub use hydrate::hydrate;
 pub use ops::artifacts::{
     bootstrap_worktreeinclude, compute_effective_worktreeinclude, generate_default_worktreeinclude,

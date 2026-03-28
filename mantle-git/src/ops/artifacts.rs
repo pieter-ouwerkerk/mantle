@@ -4,7 +4,7 @@ use std::path::Path;
 use bstr::ByteSlice;
 use gix_ignore::search::Ignore;
 
-use crate::error::MantleError;
+use crate::error::Error;
 use crate::types::{
     ArtifactType, CloneCandidate, ConfigSource, EffectiveEntry, EffectiveSource,
     EffectiveWorktreeinclude, FileCandidate, GeneratedWorktreeinclude, HydrationStrategy,
@@ -34,12 +34,12 @@ pub fn scan_worktreeinclude(
     repo_path: &str,
     worktree_path: &str,
     gitignore_fallback: bool,
-) -> Result<WorktreeIncludeResult, MantleError> {
+) -> Result<WorktreeIncludeResult, Error> {
     let repo_root = Path::new(repo_path);
     let worktree_root = Path::new(worktree_path);
 
     if !repo_root.is_dir() {
-        return Err(MantleError::RepoNotFound {
+        return Err(Error::RepoNotFound {
             path: repo_path.to_owned(),
         });
     }
@@ -218,7 +218,7 @@ fn walk_tree(
 pub fn scan_clone_candidates(
     repo_path: &str,
     worktree_path: &str,
-) -> Result<Vec<CloneCandidate>, MantleError> {
+) -> Result<Vec<CloneCandidate>, Error> {
     let result = scan_worktreeinclude(repo_path, worktree_path, true)?;
     Ok(result.clone_candidates)
 }
@@ -257,10 +257,10 @@ fn walkdir(path: &Path) -> u64 {
 pub fn compute_effective_worktreeinclude(
     repo_path: &str,
     size_threshold_bytes: u64,
-) -> Result<EffectiveWorktreeinclude, MantleError> {
+) -> Result<EffectiveWorktreeinclude, Error> {
     let repo = Path::new(repo_path);
     if !repo.is_dir() {
-        return Err(MantleError::RepoNotFound {
+        return Err(Error::RepoNotFound {
             path: repo_path.to_owned(),
         });
     }
@@ -420,10 +420,10 @@ fn collect_large_dir_suggestions(
 /// is set to true and the content reflects what *would* be generated (for preview).
 pub fn generate_default_worktreeinclude(
     repo_path: &str,
-) -> Result<GeneratedWorktreeinclude, MantleError> {
+) -> Result<GeneratedWorktreeinclude, Error> {
     let repo = Path::new(repo_path);
     if !repo.is_dir() {
-        return Err(MantleError::RepoNotFound {
+        return Err(Error::RepoNotFound {
             path: repo_path.to_owned(),
         });
     }
@@ -482,11 +482,11 @@ pub fn generate_default_worktreeinclude(
 
 /// Generate and write a `.worktreeinclude` file with sensible defaults.
 /// Returns the generation result. If the file already exists, does not overwrite.
-pub fn bootstrap_worktreeinclude(repo_path: &str) -> Result<GeneratedWorktreeinclude, MantleError> {
+pub fn bootstrap_worktreeinclude(repo_path: &str) -> Result<GeneratedWorktreeinclude, Error> {
     let result = generate_default_worktreeinclude(repo_path)?;
     if !result.already_exists {
         let file_path = Path::new(repo_path).join(".worktreeinclude");
-        std::fs::write(&file_path, &result.content).map_err(|e| MantleError::Internal {
+        std::fs::write(&file_path, &result.content).map_err(|e| Error::Internal {
             message: format!("Failed to write .worktreeinclude: {e}"),
         })?;
     }

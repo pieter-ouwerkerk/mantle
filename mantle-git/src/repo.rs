@@ -2,12 +2,12 @@ use std::path::Path;
 
 use gix::ThreadSafeRepository;
 
-use crate::error::MantleError;
+use crate::error::Error;
 
-pub(crate) fn open(path: &str) -> Result<ThreadSafeRepository, MantleError> {
+pub(crate) fn open(path: &str) -> Result<ThreadSafeRepository, Error> {
     let p = Path::new(path);
     if !p.exists() {
-        return Err(MantleError::RepoNotFound {
+        return Err(Error::RepoNotFound {
             path: path.to_owned(),
         });
     }
@@ -16,11 +16,11 @@ pub(crate) fn open(path: &str) -> Result<ThreadSafeRepository, MantleError> {
             || e.to_string().contains("Missing")
             || e.to_string().contains("missing")
         {
-            MantleError::NotARepo {
+            Error::NotARepo {
                 path: path.to_owned(),
             }
         } else {
-            MantleError::internal(e)
+            Error::internal(e)
         }
     })
 }

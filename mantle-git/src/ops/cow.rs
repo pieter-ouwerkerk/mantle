@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crate::error::MantleError;
+use crate::error::Error;
 use crate::types::CowCloneResult;
 
 /// `CLONE_NOFOLLOW` flag for `clonefile(2)` — do not follow symlinks.
@@ -161,18 +161,18 @@ fn remove_external_symlinks(cloned_root: &Path, source_root: &Path) {
 /// First attempts to `clonefile` the entire directory in one shot (supported on
 /// APFS for directories). If that fails, walks the tree and clones/copies each
 /// entry individually.
-pub fn cow_clone_directory(source: &str, destination: &str) -> Result<CowCloneResult, MantleError> {
+pub fn cow_clone_directory(source: &str, destination: &str) -> Result<CowCloneResult, Error> {
     let src = PathBuf::from(source);
     let dst = PathBuf::from(destination);
 
     if !src.is_dir() {
-        return Err(MantleError::Internal {
+        return Err(Error::Internal {
             message: format!("Source is not a directory: {source}"),
         });
     }
 
     if dst.exists() {
-        return Err(MantleError::Internal {
+        return Err(Error::Internal {
             message: format!("Destination already exists: {destination}"),
         });
     }
@@ -200,7 +200,7 @@ pub fn cow_clone_directory(source: &str, destination: &str) -> Result<CowCloneRe
 
     // Whole-directory clone failed; walk and clone per-entry
     if let Err(e) = fs::create_dir_all(&dst) {
-        return Err(MantleError::Internal {
+        return Err(Error::Internal {
             message: format!("Failed to create destination directory: {e}"),
         });
     }
