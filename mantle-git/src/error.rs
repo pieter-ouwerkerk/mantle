@@ -1,4 +1,5 @@
 #[derive(Debug, thiserror::Error)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
 pub enum Error {
     #[error("Repository not found at path: {path}")]
     RepoNotFound { path: String },

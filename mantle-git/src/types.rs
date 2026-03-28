@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CowCloneResult {
     pub cloned_count: u32,
     pub fallback_count: u32,
@@ -9,6 +10,7 @@ pub struct CowCloneResult {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ArtifactType {
     Node,
     NodePnpm,
@@ -19,6 +21,7 @@ pub enum ArtifactType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum HydrationStrategy {
     CowClone,
     DelegateToPnpm,
@@ -30,6 +33,7 @@ pub enum HydrationStrategy {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ConfigSource {
     BuiltIn,
     Worktreeinclude,
@@ -37,6 +41,7 @@ pub enum ConfigSource {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum IncludeSource {
     Worktreeinclude,
     GitignoreFallback,
@@ -44,6 +49,7 @@ pub enum IncludeSource {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CloneCandidate {
     pub source_path: String,
     pub dest_path: String,
@@ -56,6 +62,7 @@ pub struct CloneCandidate {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct FileCandidate {
     pub relative_path: String,
     pub absolute_path: String,
@@ -63,6 +70,7 @@ pub struct FileCandidate {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct WorktreeIncludeResult {
     pub clone_candidates: Vec<CloneCandidate>,
     pub file_candidates: Vec<FileCandidate>,
@@ -70,6 +78,7 @@ pub struct WorktreeIncludeResult {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum EffectiveSource {
     BuiltIn,
     Worktreeinclude,
@@ -79,6 +88,7 @@ pub enum EffectiveSource {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct EffectiveEntry {
     pub path: String,
     pub source: EffectiveSource,
@@ -88,6 +98,7 @@ pub struct EffectiveEntry {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct EffectiveWorktreeinclude {
     pub entries: Vec<EffectiveEntry>,
     pub config_source: ConfigSource,
@@ -96,6 +107,7 @@ pub struct EffectiveWorktreeinclude {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GeneratedWorktreeinclude {
     /// The generated file content, ready to write to `.worktreeinclude`.
     pub content: String,
@@ -108,6 +120,7 @@ pub struct GeneratedWorktreeinclude {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct WorktreeInfo {
     pub path: String,
     pub head: String,
@@ -116,6 +129,7 @@ pub struct WorktreeInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct HydrationResult {
     pub cloned: Vec<String>,
     pub skipped: Vec<String>,
@@ -124,6 +138,7 @@ pub struct HydrationResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CommitInfo {
     pub hash: String,
     pub author_name: String,
@@ -136,6 +151,7 @@ pub struct CommitInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct BranchInfo {
     pub name: String,
     pub date: String,
@@ -144,18 +160,21 @@ pub struct BranchInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct StatusSummary {
     pub file_count: u32,
     pub output: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct WorktreeStatusInfo {
     pub is_dirty: bool,
     pub file_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RemoteInfo {
     pub name: String,
     pub push_url: Option<String>,
@@ -163,17 +182,20 @@ pub struct RemoteInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct FetchResult {
     pub updated_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PushResult {
     pub updated_ref: Option<String>,
     pub up_to_date: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PullResult {
     pub fetch_updated_refs: Vec<String>,
     pub merge_type: String,
@@ -181,18 +203,21 @@ pub struct PullResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct AheadBehindResult {
     pub ahead: u32,
     pub behind: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CommitTreeRefsInfo {
     pub tree_hash: String,
     pub refs: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct BlameLineInfo {
     pub commit_hash: String,
     pub author_name: String,
@@ -204,6 +229,7 @@ pub struct BlameLineInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RewriteResult {
     pub new_head: String,
     pub backup_ref: String,
@@ -211,6 +237,7 @@ pub struct RewriteResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CommitMetadataInfo {
     pub author_name: String,
     pub author_email: String,
@@ -221,6 +248,7 @@ pub struct CommitMetadataInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct StashEntry {
     pub index: u32,
     pub message: String,
@@ -228,6 +256,7 @@ pub struct StashEntry {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TagInfo {
     pub name: String,
     pub target_hash: String,
@@ -239,6 +268,7 @@ pub struct TagInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ReflogEntry {
     pub id: String,
     pub previous_id: String,
@@ -248,6 +278,7 @@ pub struct ReflogEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum MergeStateKind {
     None,
     Merge,
@@ -256,6 +287,7 @@ pub enum MergeStateKind {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct MergeStateInfo {
     pub kind: MergeStateKind,
     pub conflict_count: u32,
@@ -263,6 +295,7 @@ pub struct MergeStateInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ConflictSides {
     pub path: String,
     pub base: Option<String>,
