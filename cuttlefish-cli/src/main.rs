@@ -3,6 +3,8 @@ use clap::{Parser, Subcommand};
 mod cmd_hook;
 mod cmd_hydrate;
 mod cmd_init;
+#[cfg(feature = "cuttlefish-app")]
+mod cmd_open;
 mod cmd_worktree;
 mod config;
 mod permissions;
@@ -61,6 +63,17 @@ enum Commands {
 
     /// Handle Claude Code / Codex hook events (reads JSON from stdin)
     Hook,
+
+    /// Open a repository in Cuttlefish.app
+    #[cfg(feature = "cuttlefish-app")]
+    Open {
+        /// Repository path (default: current directory)
+        #[arg(default_value = ".")]
+        path: String,
+        /// Validate without launching
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -101,5 +114,7 @@ fn main() {
             WorktreeAction::Remove { path, force } => cmd_worktree::run_remove(path, force),
         },
         Commands::Hook => cmd_hook::run(),
+        #[cfg(feature = "cuttlefish-app")]
+        Commands::Open { path, dry_run } => cmd_open::run(&path, dry_run),
     }
 }
