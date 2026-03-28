@@ -1,0 +1,18 @@
+name: Trigger Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger CLI release in cuttlefish-releases
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+        run: |
+          gh workflow run cli-release.yml \
+            --repo pieter-ouwerkerk/cuttlefish-releases \
+            -f tag="${GITHUB_REF_NAME}"
