@@ -1,0 +1,16 @@
+[package]
+name = "mantle"
+version = "0.1.0"
+edition = "2021"
+description = "Orchestration layer for CoW-accelerated git worktree hydration"
+license = "MIT"
+
+[dependencies]
+mantle-git = { path = "../mantle-git" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

@@ -130,15 +130,6 @@ pub struct WorktreeInfo {
 
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-pub struct HydrationResult {
-    pub cloned: Vec<String>,
-    pub skipped: Vec<String>,
-    pub errors: Vec<String>,
-    pub elapsed_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CommitInfo {
     pub hash: String,
     pub author_name: String,

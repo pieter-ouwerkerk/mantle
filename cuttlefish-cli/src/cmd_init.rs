@@ -13,7 +13,7 @@ pub fn run(path: &str, dry_run: bool, show: bool) {
         return;
     }
 
-    match mantle_git::bootstrap_worktreeinclude(&repo_path) {
+    match mantle_git::bootstrap_worktreeinclude(repo_path.clone()) {
         Ok(result) => {
             if result.already_exists {
                 eprintln!(".worktreeinclude already exists");
@@ -51,7 +51,7 @@ pub fn run(path: &str, dry_run: bool, show: bool) {
 
 fn run_show(repo_path: &str) {
     let threshold = 10 * 1024 * 1024;
-    match mantle_git::compute_effective_worktreeinclude(repo_path, threshold) {
+    match mantle_git::compute_effective_worktreeinclude(repo_path.to_string(), threshold) {
         Ok(result) => {
             if result.has_worktreeinclude_file {
                 eprintln!("source: .worktreeinclude");

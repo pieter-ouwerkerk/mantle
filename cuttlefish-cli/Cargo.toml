@@ -10,6 +10,7 @@ name = "cuttlefish"
 path = "src/main.rs"
 
 [dependencies]
+mantle = { path = "../mantle" }
 mantle-git = { path = "../mantle-git" }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

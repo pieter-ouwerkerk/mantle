@@ -2,7 +2,6 @@
 uniffi::setup_scaffolding!();
 
 mod error;
-mod hydrate;
 mod ops;
 mod repo;
 mod types;
@@ -10,7 +9,6 @@ mod types;
 use std::collections::HashMap;
 
 pub use error::Error;
-pub use hydrate::hydrate;
 pub use types::*;
 pub use types::MergeStateKind;
 

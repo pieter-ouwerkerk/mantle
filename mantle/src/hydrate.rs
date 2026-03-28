@@ -1,10 +1,16 @@
 use std::path::Path;
 use std::time::Instant;
 
-use crate::ops::artifacts::scan_worktreeinclude;
-use crate::ops::cow::cow_clone_directory;
-use crate::error::Error;
-use crate::types::{HydrationResult, HydrationStrategy};
+use mantle_git::{cow_clone_directory, scan_worktreeinclude, Error, HydrationStrategy};
+
+/// Result of a hydration operation.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HydrationResult {
+    pub cloned: Vec<String>,
+    pub skipped: Vec<String>,
+    pub errors: Vec<String>,
+    pub elapsed_ms: u64,
+}
 
 /// Hydrate a worktree by CoW-cloning build artifacts from the source repo.
 ///
@@ -17,7 +23,7 @@ pub fn hydrate(
 ) -> Result<HydrationResult, Error> {
     let start = Instant::now();
 
-    let scan_result = scan_worktreeinclude(repo_path, worktree_path, true)?;
+    let scan_result = scan_worktreeinclude(repo_path.to_string(), worktree_path.to_string(), true)?;
 
     let mut cloned = Vec::new();
     let mut skipped = Vec::new();
@@ -44,7 +50,7 @@ pub fn hydrate(
             continue;
         }
 
-        match cow_clone_directory(&candidate.source_path, &candidate.dest_path) {
+        match cow_clone_directory(candidate.source_path.clone(), candidate.dest_path.clone()) {
             Ok(result) => {
                 cloned.push(candidate.dest_path.clone());
                 errors.extend(result.errors);
