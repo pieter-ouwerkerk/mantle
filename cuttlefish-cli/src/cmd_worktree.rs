@@ -71,7 +71,7 @@ pub fn run_create(name: Option<String>, cwd: Option<String>) {
         process::exit(1);
     }
 
-    match mantle::hydrate(&repo_root, &wt_str, &[]) {
+    match lamella::hydrate(&repo_root, &wt_str, &[]) {
         Ok(result) => {
             if !result.cloned.is_empty() {
                 eprintln!("hydrated {} directories", result.cloned.len());

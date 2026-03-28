@@ -126,7 +126,7 @@ fn handle_pre_tool_use(event: &HookEvent) {
         return;
     }
 
-    let _ = mantle::hydrate(&cwd, &wt_str, &[]);
+    let _ = lamella::hydrate(&cwd, &wt_str, &[]);
 
     let settings_path = wt_path.join(".claude").join("settings.local.json");
     let _ = crate::permissions::inject_grants(&wt_str, &settings_path.to_string_lossy());

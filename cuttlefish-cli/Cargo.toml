@@ -15,7 +15,7 @@ default = []
 cuttlefish-app = []
 
 [dependencies]
-mantle = { path = "../mantle" }
+lamella = { path = "../mantle" }
 mantle-git = { path = "../mantle-git" }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
