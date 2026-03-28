@@ -1,6 +1,6 @@
 [package]
 name = "lamella"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Orchestration layer for CoW-accelerated git worktree hydration"
 license = "MIT OR Apache-2.0"
