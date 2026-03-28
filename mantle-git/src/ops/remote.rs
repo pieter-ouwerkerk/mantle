@@ -1,15 +1,15 @@
 use std::cell::Cell;
 use std::sync::{Arc, Mutex, Once};
 
-use crate::error::Error;
+use crate::error::GitError;
 use crate::types::{AheadBehindResult, FetchResult, PullResult, PushResult, RemoteInfo};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn open_git2(repo_path: &str) -> Result<git2::Repository, Error> {
-    git2::Repository::open(repo_path).map_err(Error::internal)
+fn open_git2(repo_path: &str) -> Result<git2::Repository, GitError> {
+    git2::Repository::open(repo_path).map_err(GitError::internal)
 }
 
 /// Detect the SSH agent socket from `~/.ssh/config` (e.g. 1Password `IdentityAgent`)
@@ -85,7 +85,7 @@ fn make_callbacks<'a>() -> git2::RemoteCallbacks<'a> {
 }
 
 /// Classify a git2 error into the appropriate `GitError` variant.
-fn classify_remote_error(e: git2::Error, url: Option<&str>) -> Error {
+fn classify_remote_error(e: git2::Error, url: Option<&str>) -> GitError {
     let msg = e.message().to_lowercase();
     if msg.contains("authentication")
         || msg.contains("auth")
@@ -93,11 +93,11 @@ fn classify_remote_error(e: git2::Error, url: Option<&str>) -> Error {
         || msg.contains("publickey")
         || msg.contains("permission denied")
     {
-        Error::AuthenticationFailed {
+        GitError::AuthenticationFailed {
             url: url.unwrap_or("unknown").to_owned(),
         }
     } else {
-        Error::Internal {
+        GitError::Internal {
             message: e.to_string(),
         }
     }
@@ -108,13 +108,13 @@ fn classify_remote_error(e: git2::Error, url: Option<&str>) -> Error {
 // ---------------------------------------------------------------------------
 
 /// List all remotes with their fetch and push URLs.
-pub fn list_remotes(repo_path: &str) -> Result<Vec<RemoteInfo>, Error> {
+pub fn list_remotes(repo_path: &str) -> Result<Vec<RemoteInfo>, GitError> {
     let repo = open_git2(repo_path)?;
-    let remote_names = repo.remotes().map_err(Error::internal)?;
+    let remote_names = repo.remotes().map_err(GitError::internal)?;
     let mut remotes = Vec::new();
 
     for name in remote_names.iter().flatten() {
-        let remote = repo.find_remote(name).map_err(Error::internal)?;
+        let remote = repo.find_remote(name).map_err(GitError::internal)?;
         remotes.push(RemoteInfo {
             name: name.to_owned(),
             fetch_url: remote.url().map(str::to_owned),
@@ -126,11 +126,11 @@ pub fn list_remotes(repo_path: &str) -> Result<Vec<RemoteInfo>, Error> {
 }
 
 /// Fetch from a remote, returning which refs were updated.
-pub fn fetch(repo_path: &str, remote_name: &str) -> Result<FetchResult, Error> {
+pub fn fetch(repo_path: &str, remote_name: &str) -> Result<FetchResult, GitError> {
     let repo = open_git2(repo_path)?;
     let mut remote = repo
         .find_remote(remote_name)
-        .map_err(|_| Error::RemoteNotFound {
+        .map_err(|_| GitError::RemoteNotFound {
             name: remote_name.to_owned(),
         })?;
 
@@ -163,11 +163,11 @@ pub fn push(
     remote_name: &str,
     refspec: &str,
     force: bool,
-) -> Result<PushResult, Error> {
+) -> Result<PushResult, GitError> {
     let repo = open_git2(repo_path)?;
     let mut remote = repo
         .find_remote(remote_name)
-        .map_err(|_| Error::RemoteNotFound {
+        .map_err(|_| GitError::RemoteNotFound {
             name: remote_name.to_owned(),
         })?;
 
@@ -204,7 +204,7 @@ pub fn push(
 
     // Check for rejection
     if let Some(reason) = rejection.lock().unwrap().take() {
-        return Err(Error::PushRejected { reason });
+        return Err(GitError::PushRejected { reason });
     }
 
     let ref_updated = updated_ref.lock().unwrap().take();
@@ -222,7 +222,7 @@ pub fn push_branch(
     branch: &str,
     set_upstream: bool,
     force: bool,
-) -> Result<PushResult, Error> {
+) -> Result<PushResult, GitError> {
     let repo = open_git2(repo_path)?;
 
     // Resolve which remote to push to
@@ -239,23 +239,23 @@ pub fn push_branch(
 
     // Set upstream tracking if requested
     if set_upstream {
-        let mut config = repo.config().map_err(Error::internal)?;
+        let mut config = repo.config().map_err(GitError::internal)?;
         config
             .set_str(&format!("branch.{branch}.remote"), &remote_name)
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
         config
             .set_str(
                 &format!("branch.{branch}.merge"),
                 &format!("refs/heads/{branch}"),
             )
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
     }
 
     Ok(result)
 }
 
 /// Fetch + fast-forward merge. Returns `MergeConflict` if branches have diverged.
-pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResult, Error> {
+pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResult, GitError> {
     // Step 1: Fetch
     let fetch_result = fetch(repo_path, remote_name)?;
 
@@ -267,7 +267,7 @@ pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResu
 
     let local_ref = repo
         .find_reference(&local_ref_name)
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
     let Ok(remote_ref) = repo.find_reference(&remote_ref_name) else {
         // Remote branch doesn't exist (yet) — nothing to merge
         return Ok(PullResult {
@@ -277,10 +277,10 @@ pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResu
         });
     };
 
-    let local_oid = local_ref.target().ok_or_else(|| Error::Internal {
+    let local_oid = local_ref.target().ok_or_else(|| GitError::Internal {
         message: "local branch has no target".to_owned(),
     })?;
-    let remote_oid = remote_ref.target().ok_or_else(|| Error::Internal {
+    let remote_oid = remote_ref.target().ok_or_else(|| GitError::Internal {
         message: "remote tracking branch has no target".to_owned(),
     })?;
 
@@ -296,10 +296,10 @@ pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResu
     // Check ahead/behind
     let (ahead, behind) = repo
         .graph_ahead_behind(local_oid, remote_oid)
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     if ahead > 0 && behind > 0 {
-        return Err(Error::MergeConflict {
+        return Err(GitError::MergeConflict {
             message: format!(
                 "Branches have diverged: {ahead} ahead, {behind} behind. \
                  Fast-forward not possible."
@@ -317,7 +317,7 @@ pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResu
     }
 
     // Fast-forward: update ref and checkout
-    let remote_commit = repo.find_commit(remote_oid).map_err(Error::internal)?;
+    let remote_commit = repo.find_commit(remote_oid).map_err(GitError::internal)?;
     let remote_obj = remote_commit.as_object();
 
     repo.reference(
@@ -326,14 +326,14 @@ pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResu
         true,
         &format!("pull: fast-forward {branch}"),
     )
-    .map_err(Error::internal)?;
+    .map_err(GitError::internal)?;
 
     repo.checkout_tree(
         remote_obj,
         Some(git2::build::CheckoutBuilder::new().force()),
     )
-    .map_err(Error::internal)?;
-    repo.set_head(&local_ref_name).map_err(Error::internal)?;
+    .map_err(GitError::internal)?;
+    repo.set_head(&local_ref_name).map_err(GitError::internal)?;
 
     Ok(PullResult {
         fetch_updated_refs: fetch_result.updated_refs,
@@ -343,49 +343,49 @@ pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResu
 }
 
 /// Get the remote tracking branch for a local branch.
-pub fn remote_tracking_branch(repo_path: &str, branch: &str) -> Result<Option<String>, Error> {
+pub fn remote_tracking_branch(repo_path: &str, branch: &str) -> Result<Option<String>, GitError> {
     let repo = open_git2(repo_path)?;
     match repo.branch_upstream_name(&format!("refs/heads/{branch}")) {
         Ok(buf) => Ok(buf.as_str().map(str::to_owned)),
         Err(e) if e.code() == git2::ErrorCode::NotFound => Ok(None),
-        Err(e) => Err(Error::internal(e)),
+        Err(e) => Err(GitError::internal(e)),
     }
 }
 
 /// Get ahead/behind counts relative to the remote tracking branch.
-pub fn ahead_behind_remote(repo_path: &str, branch: &str) -> Result<AheadBehindResult, Error> {
+pub fn ahead_behind_remote(repo_path: &str, branch: &str) -> Result<AheadBehindResult, GitError> {
     let repo = open_git2(repo_path)?;
 
     let local_ref = format!("refs/heads/{branch}");
     let local_oid = repo
         .find_reference(&local_ref)
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .target()
-        .ok_or_else(|| Error::Internal {
+        .ok_or_else(|| GitError::Internal {
             message: "local branch has no target".to_owned(),
         })?;
 
     let upstream_name = match repo.branch_upstream_name(&local_ref) {
         Ok(buf) => buf.as_str().unwrap_or("").to_owned(),
         Err(e) if e.code() == git2::ErrorCode::NotFound => {
-            return Err(Error::Internal {
+            return Err(GitError::Internal {
                 message: format!("No upstream configured for branch '{branch}'"),
             });
         }
-        Err(e) => return Err(Error::internal(e)),
+        Err(e) => return Err(GitError::internal(e)),
     };
 
     let upstream_oid = repo
         .find_reference(&upstream_name)
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .target()
-        .ok_or_else(|| Error::Internal {
+        .ok_or_else(|| GitError::Internal {
             message: "upstream branch has no target".to_owned(),
         })?;
 
     let (ahead, behind) = repo
         .graph_ahead_behind(local_oid, upstream_oid)
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     Ok(AheadBehindResult {
         ahead: u32::try_from(ahead).unwrap_or(u32::MAX),

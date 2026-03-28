@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::error::GitError;
 use crate::repo;
 use crate::types::{StatusSummary, WorktreeStatusInfo};
 
@@ -47,7 +47,7 @@ fn tree_index_entry(change: gix::diff::index::ChangeRef<'_, '_>) -> StatusEntry 
     }
 }
 
-fn collect_status_entries(repo_path: &str) -> Result<Vec<StatusEntry>, Error> {
+fn collect_status_entries(repo_path: &str) -> Result<Vec<StatusEntry>, GitError> {
     use gix::bstr::ByteSlice;
     use gix::dir::entry::Status as DirStatus;
     use gix::status::index_worktree;
@@ -60,15 +60,15 @@ fn collect_status_entries(repo_path: &str) -> Result<Vec<StatusEntry>, Error> {
 
     let iter = repo
         .status(gix::progress::Discard)
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .untracked_files(UntrackedFiles::Files)
         .into_iter(Vec::new())
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let mut entries = Vec::new();
 
     for item in iter {
-        let item = item.map_err(Error::internal)?;
+        let item = item.map_err(GitError::internal)?;
 
         match item {
             // ── HEAD-vs-index (staged) changes ──────────────────────
@@ -146,13 +146,13 @@ fn collect_status_entries(repo_path: &str) -> Result<Vec<StatusEntry>, Error> {
 // ---------------------------------------------------------------------------
 
 /// Returns `true` if the working tree has no staged, unstaged, or untracked changes.
-pub fn is_clean(repo_path: &str) -> Result<bool, Error> {
+pub fn is_clean(repo_path: &str) -> Result<bool, GitError> {
     let entries = collect_status_entries(repo_path)?;
     Ok(entries.is_empty())
 }
 
 /// Returns a count of changed files and a porcelain-format output string.
-pub fn status_summary(repo_path: &str) -> Result<StatusSummary, Error> {
+pub fn status_summary(repo_path: &str) -> Result<StatusSummary, GitError> {
     let entries = collect_status_entries(repo_path)?;
     let file_count = u32::try_from(entries.len()).unwrap_or(u32::MAX);
     let output = if entries.is_empty() {
@@ -168,12 +168,12 @@ pub fn status_summary(repo_path: &str) -> Result<StatusSummary, Error> {
 }
 
 /// Returns sorted list of all tracked files in the index.
-pub fn list_tracked_files(repo_path: &str) -> Result<Vec<String>, Error> {
+pub fn list_tracked_files(repo_path: &str) -> Result<Vec<String>, GitError> {
     use gix::bstr::ByteSlice;
 
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
-    let index = repo.index_or_empty().map_err(Error::internal)?;
+    let index = repo.index_or_empty().map_err(GitError::internal)?;
 
     let mut files: Vec<String> = index
         .entries()
@@ -185,7 +185,7 @@ pub fn list_tracked_files(repo_path: &str) -> Result<Vec<String>, Error> {
 }
 
 /// Returns list of untracked files (respects .gitignore).
-pub fn list_untracked_files(repo_path: &str) -> Result<Vec<String>, Error> {
+pub fn list_untracked_files(repo_path: &str) -> Result<Vec<String>, GitError> {
     use gix::bstr::ByteSlice;
     use gix::dir::entry::Status as DirStatus;
     use gix::status::index_worktree;
@@ -197,15 +197,15 @@ pub fn list_untracked_files(repo_path: &str) -> Result<Vec<String>, Error> {
 
     let iter = repo
         .status(gix::progress::Discard)
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .untracked_files(UntrackedFiles::Files)
         .into_iter(Vec::new())
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let mut files = Vec::new();
 
     for item in iter {
-        let item = item.map_err(Error::internal)?;
+        let item = item.map_err(GitError::internal)?;
         if let Item::IndexWorktree(index_worktree::Item::DirectoryContents { entry, .. }) = &item {
             if matches!(entry.status, DirStatus::Untracked) {
                 files.push(entry.rela_path.to_str_lossy().to_string());
@@ -219,7 +219,7 @@ pub fn list_untracked_files(repo_path: &str) -> Result<Vec<String>, Error> {
 
 /// Returns deduplicated list of all changed file paths (staged, unstaged, untracked).
 /// For renames, returns the destination path.
-pub fn changed_paths(repo_path: &str) -> Result<Vec<String>, Error> {
+pub fn changed_paths(repo_path: &str) -> Result<Vec<String>, GitError> {
     let entries = collect_status_entries(repo_path)?;
     let mut paths: Vec<String> = entries.into_iter().map(|e| e.path).collect();
     paths.sort();
@@ -228,7 +228,7 @@ pub fn changed_paths(repo_path: &str) -> Result<Vec<String>, Error> {
 }
 
 /// Returns whether the worktree is dirty and how many files changed.
-pub fn worktree_status(path: &str) -> Result<WorktreeStatusInfo, Error> {
+pub fn worktree_status(path: &str) -> Result<WorktreeStatusInfo, GitError> {
     let entries = collect_status_entries(path)?;
     let file_count = u32::try_from(entries.len()).unwrap_or(u32::MAX);
     Ok(WorktreeStatusInfo {

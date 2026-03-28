@@ -1,15 +1,15 @@
 use std::path::Path;
 
-use crate::error::Error;
+use crate::error::GitError;
 use crate::repo;
 use crate::types::WorktreeInfo;
 
-fn open_git2(repo_path: &str) -> Result<git2::Repository, Error> {
-    git2::Repository::open(repo_path).map_err(Error::internal)
+fn open_git2(repo_path: &str) -> Result<git2::Repository, GitError> {
+    git2::Repository::open(repo_path).map_err(GitError::internal)
 }
 
 /// List all worktrees using gix (pure read-only, no process spawn).
-pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, Error> {
+pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, GitError> {
     let ts_repo = repo::open(repo_path)?;
     let repo = ts_repo.to_thread_local();
 
@@ -35,7 +35,7 @@ pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, Error> {
     });
 
     // Linked worktrees
-    let proxies = repo.worktrees().map_err(Error::internal)?;
+    let proxies = repo.worktrees().map_err(GitError::internal)?;
     for proxy in proxies {
         let wt_path = proxy
             .base()
@@ -44,7 +44,7 @@ pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, Error> {
 
         let linked_repo = proxy
             .into_repo_with_possibly_inaccessible_worktree()
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
 
         let head = linked_repo
             .head_id()
@@ -73,19 +73,19 @@ pub fn worktree_add_new_branch(
     path: &str,
     branch: &str,
     start_point: &str,
-) -> Result<(), Error> {
+) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
 
     // Resolve start_point to a commit and create the branch
     let start = repo
         .revparse_single(start_point)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: start_point.to_owned(),
         })?;
-    let commit = start.peel_to_commit().map_err(Error::internal)?;
+    let commit = start.peel_to_commit().map_err(GitError::internal)?;
     let branch_ref = repo
         .branch(branch, &commit, false)
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     // Create the worktree using the new branch
     let reference = branch_ref.into_reference();
@@ -97,18 +97,18 @@ pub fn worktree_add_new_branch(
         .map_or_else(|| branch.to_owned(), |n| n.to_string_lossy().to_string());
 
     repo.worktree(&wt_name, Path::new(path), Some(&opts))
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     Ok(())
 }
 
 /// Add a worktree for an existing branch via git2.
-pub fn worktree_add_existing(repo_path: &str, path: &str, branch: &str) -> Result<(), Error> {
+pub fn worktree_add_existing(repo_path: &str, path: &str, branch: &str) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
 
     let branch_ref = repo
         .find_branch(branch, git2::BranchType::Local)
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let reference = branch_ref.into_reference();
     let mut opts = git2::WorktreeAddOptions::new();
@@ -119,13 +119,13 @@ pub fn worktree_add_existing(repo_path: &str, path: &str, branch: &str) -> Resul
         .map_or_else(|| branch.to_owned(), |n| n.to_string_lossy().to_string());
 
     repo.worktree(&wt_name, Path::new(path), Some(&opts))
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     Ok(())
 }
 
 /// Remove a worktree (clean only) — errors if the worktree has uncommitted changes.
-pub fn worktree_remove_clean(repo_path: &str, path: &str) -> Result<(), Error> {
+pub fn worktree_remove_clean(repo_path: &str, path: &str) -> Result<(), GitError> {
     // Check if the worktree is clean before removing
     {
         let wt_repo = open_git2(path)?;
@@ -136,9 +136,9 @@ pub fn worktree_remove_clean(repo_path: &str, path: &str) -> Result<(), Error> {
                     .recurse_untracked_dirs(true)
                     .include_ignored(false),
             ))
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
         if !statuses.is_empty() {
-            return Err(Error::Internal {
+            return Err(GitError::Internal {
                 message: format!(
                     "cannot remove worktree '{}': has {} uncommitted change(s); use force to override",
                     path,
@@ -149,7 +149,7 @@ pub fn worktree_remove_clean(repo_path: &str, path: &str) -> Result<(), Error> {
     }
 
     // Remove the working tree directory
-    std::fs::remove_dir_all(path).map_err(|e| Error::Internal {
+    std::fs::remove_dir_all(path).map_err(|e| GitError::Internal {
         message: format!("Failed to remove worktree directory: {e}"),
     })?;
 
@@ -160,9 +160,9 @@ pub fn worktree_remove_clean(repo_path: &str, path: &str) -> Result<(), Error> {
 }
 
 /// Remove a worktree forcefully — removes even if dirty or locked.
-pub fn worktree_remove_force(repo_path: &str, path: &str) -> Result<(), Error> {
+pub fn worktree_remove_force(repo_path: &str, path: &str) -> Result<(), GitError> {
     // Remove the working tree directory
-    std::fs::remove_dir_all(path).map_err(|e| Error::Internal {
+    std::fs::remove_dir_all(path).map_err(|e| GitError::Internal {
         message: format!("Failed to remove worktree directory: {e}"),
     })?;
 
@@ -173,14 +173,14 @@ pub fn worktree_remove_force(repo_path: &str, path: &str) -> Result<(), Error> {
 }
 
 /// Prune stale worktree metadata — removes admin entries for worktrees whose directories no longer exist.
-pub fn worktree_prune(repo_path: &str) -> Result<(), Error> {
+pub fn worktree_prune(repo_path: &str) -> Result<(), GitError> {
     prune_stale_worktrees(repo_path)
 }
 
 /// Internal: prune all invalid (stale) worktree entries via git2.
-fn prune_stale_worktrees(repo_path: &str) -> Result<(), Error> {
+fn prune_stale_worktrees(repo_path: &str) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
-    let names = repo.worktrees().map_err(Error::internal)?;
+    let names = repo.worktrees().map_err(GitError::internal)?;
 
     for name in names.iter().flatten() {
         if let Ok(wt) = repo.find_worktree(name) {

@@ -1,6 +1,6 @@
 #[derive(Debug, thiserror::Error)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
-pub enum Error {
+pub enum GitError {
     #[error("Repository not found at path: {path}")]
     RepoNotFound { path: String },
 
@@ -53,7 +53,7 @@ pub enum Error {
     Internal { message: String },
 }
 
-impl Error {
+impl GitError {
     pub fn internal(e: impl std::fmt::Display) -> Self {
         Self::Internal {
             message: e.to_string(),
@@ -61,7 +61,7 @@ impl Error {
     }
 }
 
-impl From<gix::open::Error> for Error {
+impl From<gix::open::Error> for GitError {
     fn from(e: gix::open::Error) -> Self {
         Self::Internal {
             message: e.to_string(),
@@ -69,7 +69,7 @@ impl From<gix::open::Error> for Error {
     }
 }
 
-impl From<std::io::Error> for Error {
+impl From<std::io::Error> for GitError {
     fn from(e: std::io::Error) -> Self {
         Self::Internal {
             message: e.to_string(),

@@ -1,19 +1,19 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::error::Error;
+use crate::error::GitError;
 use crate::types::{ConflictSides, MergeStateInfo, MergeStateKind};
 
-fn open_git2(repo_path: &str) -> Result<git2::Repository, Error> {
-    git2::Repository::open(repo_path).map_err(Error::internal)
+fn open_git2(repo_path: &str) -> Result<git2::Repository, GitError> {
+    git2::Repository::open(repo_path).map_err(GitError::internal)
 }
 
 /// Resolve the `.git` directory for a path, handling worktrees where `.git` is a file.
-fn resolve_git_dir(repo_path: &str) -> Result<std::path::PathBuf, Error> {
+fn resolve_git_dir(repo_path: &str) -> Result<std::path::PathBuf, GitError> {
     let dot_git = Path::new(repo_path).join(".git");
     if dot_git.is_file() {
         // Worktree: .git is a file containing "gitdir: <path>"
-        let content = std::fs::read_to_string(&dot_git).map_err(Error::internal)?;
+        let content = std::fs::read_to_string(&dot_git).map_err(GitError::internal)?;
         let gitdir = content.strip_prefix("gitdir: ").unwrap_or(&content).trim();
         let gitdir_path = Path::new(gitdir);
         if gitdir_path.is_absolute() {
@@ -27,7 +27,7 @@ fn resolve_git_dir(repo_path: &str) -> Result<std::path::PathBuf, Error> {
 }
 
 /// Check the merge/rebase/cherry-pick state of a repository.
-pub fn merge_state(repo_path: &str) -> Result<MergeStateInfo, Error> {
+pub fn merge_state(repo_path: &str) -> Result<MergeStateInfo, GitError> {
     let git_dir = resolve_git_dir(repo_path)?;
 
     // Check for MERGE_HEAD (merge in progress)
@@ -96,22 +96,22 @@ fn read_rebase_branch(git_dir: &Path) -> Option<String> {
 }
 
 /// Count unresolved conflicts using git2's index.
-fn count_conflicts(repo_path: &str) -> Result<u32, Error> {
+fn count_conflicts(repo_path: &str) -> Result<u32, GitError> {
     let repo = open_git2(repo_path)?;
-    let index = repo.index().map_err(Error::internal)?;
-    let conflicts = index.conflicts().map_err(Error::internal)?;
+    let index = repo.index().map_err(GitError::internal)?;
+    let conflicts = index.conflicts().map_err(GitError::internal)?;
     Ok(u32::try_from(conflicts.count()).unwrap_or(u32::MAX))
 }
 
 /// List all conflict file paths from the index.
-pub fn list_conflict_paths(repo_path: &str) -> Result<Vec<String>, Error> {
+pub fn list_conflict_paths(repo_path: &str) -> Result<Vec<String>, GitError> {
     let repo = open_git2(repo_path)?;
-    let index = repo.index().map_err(Error::internal)?;
-    let conflicts = index.conflicts().map_err(Error::internal)?;
+    let index = repo.index().map_err(GitError::internal)?;
+    let conflicts = index.conflicts().map_err(GitError::internal)?;
 
     let mut paths = Vec::new();
     for conflict in conflicts {
-        let conflict = conflict.map_err(Error::internal)?;
+        let conflict = conflict.map_err(GitError::internal)?;
         // Use whichever side has a path (ours, theirs, or ancestor)
         let path = conflict
             .our
@@ -127,33 +127,33 @@ pub fn list_conflict_paths(repo_path: &str) -> Result<Vec<String>, Error> {
 }
 
 /// Resolve a conflict by checking out "ours" and staging the file.
-pub fn checkout_ours(repo_path: &str, file_path: &str) -> Result<(), Error> {
+pub fn checkout_ours(repo_path: &str, file_path: &str) -> Result<(), GitError> {
     run_git_cmd(repo_path, &["checkout", "--ours", "--", file_path])?;
     run_git_cmd(repo_path, &["add", "--", file_path])?;
     Ok(())
 }
 
 /// Resolve a conflict by checking out "theirs" and staging the file.
-pub fn checkout_theirs(repo_path: &str, file_path: &str) -> Result<(), Error> {
+pub fn checkout_theirs(repo_path: &str, file_path: &str) -> Result<(), GitError> {
     run_git_cmd(repo_path, &["checkout", "--theirs", "--", file_path])?;
     run_git_cmd(repo_path, &["add", "--", file_path])?;
     Ok(())
 }
 
 /// Mark a file as resolved by staging it.
-pub fn mark_resolved(repo_path: &str, file_path: &str) -> Result<(), Error> {
+pub fn mark_resolved(repo_path: &str, file_path: &str) -> Result<(), GitError> {
     run_git_cmd(repo_path, &["add", "--", file_path])?;
     Ok(())
 }
 
 /// Extract the base/ours/theirs content for a conflicted file from the git index.
-pub fn conflict_sides(repo_path: &str, file_path: &str) -> Result<ConflictSides, Error> {
+pub fn conflict_sides(repo_path: &str, file_path: &str) -> Result<ConflictSides, GitError> {
     let repo = open_git2(repo_path)?;
-    let index = repo.index().map_err(Error::internal)?;
-    let conflicts = index.conflicts().map_err(Error::internal)?;
+    let index = repo.index().map_err(GitError::internal)?;
+    let conflicts = index.conflicts().map_err(GitError::internal)?;
 
     for conflict in conflicts {
-        let conflict = conflict.map_err(Error::internal)?;
+        let conflict = conflict.map_err(GitError::internal)?;
         let entry_path = conflict
             .our
             .as_ref()
@@ -177,7 +177,7 @@ pub fn conflict_sides(repo_path: &str, file_path: &str) -> Result<ConflictSides,
         });
     }
 
-    Err(Error::Internal {
+    Err(GitError::Internal {
         message: format!("No conflict found for path: {file_path}"),
     })
 }
@@ -190,18 +190,18 @@ fn read_blob_content(repo: &git2::Repository, entry: Option<&git2::IndexEntry>) 
 }
 
 /// Run a git command in the given repo path.
-fn run_git_cmd(repo_path: &str, args: &[&str]) -> Result<String, Error> {
+fn run_git_cmd(repo_path: &str, args: &[&str]) -> Result<String, GitError> {
     let output = Command::new("git")
         .args(args)
         .current_dir(repo_path)
         .output()
-        .map_err(|e| Error::Internal {
+        .map_err(|e| GitError::Internal {
             message: format!("Failed to run git: {e}"),
         })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(Error::Internal {
+        return Err(GitError::Internal {
             message: format!("git {} failed: {stderr}", args.join(" ")),
         });
     }

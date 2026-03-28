@@ -2,7 +2,7 @@ use std::fmt::Write as FmtWrite;
 
 use gix::bstr::ByteSlice;
 
-use crate::error::Error;
+use crate::error::GitError;
 use crate::repo;
 
 // ---------------------------------------------------------------------------
@@ -184,14 +184,14 @@ fn diff_trees(
     repo: &gix::Repository,
     old_tree: Option<gix::Tree<'_>>,
     new_tree: &gix::Tree<'_>,
-) -> Result<String, Error> {
+) -> Result<String, GitError> {
     use gix::object::tree::diff::Action;
 
     let mut diffs: Vec<(String, FileChange)> = Vec::new();
 
     match old_tree {
         Some(otree) => {
-            let mut changes = otree.changes().map_err(Error::internal)?;
+            let mut changes = otree.changes().map_err(GitError::internal)?;
             changes
                 .for_each_to_obtain_tree(new_tree, |change| {
                     // Skip tree (directory) entries — only diff blobs
@@ -249,7 +249,7 @@ fn diff_trees(
                     diffs.push((path, fc));
                     Ok::<Action, std::convert::Infallible>(Action::Continue(()))
                 })
-                .map_err(Error::internal)?;
+                .map_err(GitError::internal)?;
         }
         None => {
             // Empty old tree — treat all entries in new_tree as additions
@@ -266,7 +266,7 @@ fn diff_trees(
 fn format_file_changes(
     repo: &gix::Repository,
     diffs: &[(String, FileChange)],
-) -> Result<String, Error> {
+) -> Result<String, GitError> {
     let mut result = String::new();
     for (path, change) in diffs {
         let diff_text = format_single_change(repo, path, change)?;
@@ -281,19 +281,19 @@ fn format_single_change(
     repo: &gix::Repository,
     path: &str,
     change: &FileChange,
-) -> Result<String, Error> {
+) -> Result<String, GitError> {
     match change {
         FileChange::Addition { id, mode } => {
-            let blob = repo.find_object(*id).map_err(Error::internal)?;
+            let blob = repo.find_object(*id).map_err(GitError::internal)?;
             Ok(format_blob_diff(path, None, Some(&blob.data), None, Some(*mode)))
         }
         FileChange::Deletion { id, mode } => {
-            let blob = repo.find_object(*id).map_err(Error::internal)?;
+            let blob = repo.find_object(*id).map_err(GitError::internal)?;
             Ok(format_blob_diff(path, Some(&blob.data), None, Some(*mode), None))
         }
         FileChange::Modification { old_id, new_id, old_mode, new_mode } => {
-            let old_blob = repo.find_object(*old_id).map_err(Error::internal)?;
-            let new_blob = repo.find_object(*new_id).map_err(Error::internal)?;
+            let old_blob = repo.find_object(*old_id).map_err(GitError::internal)?;
+            let new_blob = repo.find_object(*new_id).map_err(GitError::internal)?;
             Ok(format_blob_diff(
                 path,
                 Some(&old_blob.data),
@@ -303,8 +303,8 @@ fn format_single_change(
             ))
         }
         FileChange::Rename { old_path, old_id, new_id, old_mode, new_mode, similarity } => {
-            let old_blob = repo.find_object(*old_id).map_err(Error::internal)?;
-            let new_blob = repo.find_object(*new_id).map_err(Error::internal)?;
+            let old_blob = repo.find_object(*old_id).map_err(GitError::internal)?;
+            let new_blob = repo.find_object(*new_id).map_err(GitError::internal)?;
             Ok(format_rename_diff(
                 old_path,
                 path,
@@ -501,9 +501,9 @@ fn collect_tree_entries(
     tree: &gix::Tree<'_>,
     prefix: &str,
     out: &mut Vec<(String, FileChange)>,
-) -> Result<(), Error> {
+) -> Result<(), GitError> {
     for entry in tree.iter() {
-        let entry = entry.map_err(Error::internal)?;
+        let entry = entry.map_err(GitError::internal)?;
         let name = entry.filename().to_str_lossy();
         let full_path = if prefix.is_empty() {
             name.to_string()
@@ -535,21 +535,21 @@ fn collect_tree_entries(
 // ---------------------------------------------------------------------------
 
 /// Show the diff for a single commit (equivalent to `git show --format= --patch <hash>`).
-pub fn show_diff(repo_path: &str, commit_hash: &str) -> Result<String, Error> {
+pub fn show_diff(repo_path: &str, commit_hash: &str) -> Result<String, GitError> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
 
     let object = repo
         .rev_parse_single(commit_hash)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: commit_hash.to_owned(),
         })?;
     let commit = object
         .object()
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .try_into_commit()
-        .map_err(Error::internal)?;
-    let new_tree = commit.tree().map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
+    let new_tree = commit.tree().map_err(GitError::internal)?;
 
     let parent_tree = commit
         .parent_ids()
@@ -562,18 +562,18 @@ pub fn show_diff(repo_path: &str, commit_hash: &str) -> Result<String, Error> {
 }
 
 /// Diff between two refs using their merge-base (equivalent to `git diff base...head`).
-pub fn diff_between_refs(repo_path: &str, base: &str, head: &str) -> Result<String, Error> {
+pub fn diff_between_refs(repo_path: &str, base: &str, head: &str) -> Result<String, GitError> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
 
     let base_obj = repo
         .rev_parse_single(base)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: base.to_owned(),
         })?;
     let head_obj = repo
         .rev_parse_single(head)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: head.to_owned(),
         })?;
 
@@ -581,30 +581,30 @@ pub fn diff_between_refs(repo_path: &str, base: &str, head: &str) -> Result<Stri
     let head_id = head_obj.detach();
 
     // Find merge-base using git2 (gix doesn't expose merge-base easily)
-    let git2_repo = git2::Repository::open(repo_path).map_err(Error::internal)?;
+    let git2_repo = git2::Repository::open(repo_path).map_err(GitError::internal)?;
     let merge_base_oid = git2_repo
         .merge_base(
-            git2::Oid::from_bytes(base_id.as_slice()).map_err(Error::internal)?,
-            git2::Oid::from_bytes(head_id.as_slice()).map_err(Error::internal)?,
+            git2::Oid::from_bytes(base_id.as_slice()).map_err(GitError::internal)?,
+            git2::Oid::from_bytes(head_id.as_slice()).map_err(GitError::internal)?,
         )
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     // Convert git2 OID back to gix
     let merge_base_gix = gix::ObjectId::from_bytes_or_panic(merge_base_oid.as_bytes());
     let merge_base_tree = repo
         .find_object(merge_base_gix)
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .try_into_commit()
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .tree()
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let head_commit = repo
         .find_object(head_id)
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .try_into_commit()
-        .map_err(Error::internal)?;
-    let head_tree = head_commit.tree().map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
+    let head_tree = head_commit.tree().map_err(GitError::internal)?;
 
     diff_trees(&repo, Some(merge_base_tree), &head_tree)
 }
@@ -632,14 +632,14 @@ impl WtEntry {
 }
 
 /// Working tree diff (equivalent to `git diff HEAD` + untracked file diffs).
-pub fn working_tree_diff(repo_path: &str) -> Result<String, Error> {
+pub fn working_tree_diff(repo_path: &str) -> Result<String, GitError> {
     use gix::status::UntrackedFiles;
 
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
     let work_dir = repo
         .workdir()
-        .ok_or_else(|| Error::Internal {
+        .ok_or_else(|| GitError::Internal {
             message: "bare repository".to_owned(),
         })?
         .to_path_buf();
@@ -648,14 +648,14 @@ pub fn working_tree_diff(repo_path: &str) -> Result<String, Error> {
 
     let iter = repo
         .status(gix::progress::Discard)
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .untracked_files(UntrackedFiles::Files)
         .into_iter(Vec::new())
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let mut entries: Vec<WtEntry> = Vec::new();
     for item in iter {
-        let item = item.map_err(Error::internal)?;
+        let item = item.map_err(GitError::internal)?;
         collect_wt_entry(item, &repo, head_tree.as_ref(), &work_dir, &mut entries)?;
     }
 
@@ -669,7 +669,7 @@ fn collect_wt_entry(
     head_tree: Option<&gix::Tree<'_>>,
     work_dir: &std::path::Path,
     entries: &mut Vec<WtEntry>,
-) -> Result<(), Error> {
+) -> Result<(), GitError> {
     use gix::bstr::ByteSlice;
     use gix::status::Item;
 
@@ -677,7 +677,7 @@ fn collect_wt_entry(
         Item::TreeIndex(change) => {
             let (path_bstr, _idx, _mode, id) = change.fields();
             let path = path_bstr.to_str_lossy().to_string();
-            let new_blob = repo.find_object(id).map_err(Error::internal)?;
+            let new_blob = repo.find_object(id).map_err(GitError::internal)?;
             let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
             entries.push(WtEntry {
                 path, old_path: None, old_data,
@@ -828,14 +828,14 @@ fn detect_wt_renames(entries: &mut Vec<WtEntry>) {
 }
 
 /// Working tree diff for LLM context — sectioned into staged, unstaged, untracked.
-pub fn working_tree_diff_for_context(repo_path: &str) -> Result<String, Error> {
+pub fn working_tree_diff_for_context(repo_path: &str) -> Result<String, GitError> {
     use gix::status::UntrackedFiles;
 
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
     let work_dir = repo
         .workdir()
-        .ok_or_else(|| Error::Internal {
+        .ok_or_else(|| GitError::Internal {
             message: "bare repository".to_owned(),
         })?
         .to_path_buf();
@@ -844,17 +844,17 @@ pub fn working_tree_diff_for_context(repo_path: &str) -> Result<String, Error> {
 
     let iter = repo
         .status(gix::progress::Discard)
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .untracked_files(UntrackedFiles::Files)
         .into_iter(Vec::new())
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let mut staged = String::new();
     let mut unstaged = String::new();
     let mut untracked_files: Vec<String> = Vec::new();
 
     for item in iter {
-        let item = item.map_err(Error::internal)?;
+        let item = item.map_err(GitError::internal)?;
         collect_context_item(
             item, &repo, head_tree.as_ref(), &work_dir,
             &mut staged, &mut unstaged, &mut untracked_files,
@@ -872,7 +872,7 @@ fn collect_context_item(
     staged: &mut String,
     unstaged: &mut String,
     untracked_files: &mut Vec<String>,
-) -> Result<(), Error> {
+) -> Result<(), GitError> {
     use gix::bstr::ByteSlice;
     use gix::diff::index::ChangeRef as TIChange;
     use gix::dir::entry::Status as DirStatus;
@@ -888,7 +888,7 @@ fn collect_context_item(
             let diff_text = if matches!(&change, TIChange::Deletion { .. }) {
                 format_blob_diff(&path, old_data.as_deref(), None, old_mode, None)
             } else {
-                let new_blob = repo.find_object(id).map_err(Error::internal)?;
+                let new_blob = repo.find_object(id).map_err(GitError::internal)?;
                 format_blob_diff(&path, old_data.as_deref(), Some(&new_blob.data), old_mode, Some(0o100_644))
             };
             if !diff_text.is_empty() { staged.push_str(&diff_text); }

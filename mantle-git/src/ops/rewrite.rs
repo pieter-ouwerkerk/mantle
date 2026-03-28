@@ -2,15 +2,15 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use git2::{Oid, Repository, Signature, Time};
 
-use crate::error::Error;
+use crate::error::GitError;
 use crate::types::{CommitMetadataInfo, RewriteResult};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn open_git2(repo_path: &str) -> Result<Repository, Error> {
-    Repository::open(repo_path).map_err(Error::internal)
+fn open_git2(repo_path: &str) -> Result<Repository, GitError> {
+    Repository::open(repo_path).map_err(GitError::internal)
 }
 
 /// Collect all commits between `target_oid` and `head_oid` that need rewriting.
@@ -23,7 +23,7 @@ fn collect_commit_chain(
     repo: &Repository,
     target_oid: Oid,
     head_oid: Oid,
-) -> Result<Vec<Oid>, Error> {
+) -> Result<Vec<Oid>, GitError> {
     if head_oid == target_oid {
         return Ok(vec![target_oid]);
     }
@@ -38,7 +38,7 @@ fn collect_commit_chain(
     visited.insert(head_oid);
 
     while let Some(oid) = queue.pop_front() {
-        let commit = repo.find_commit(oid).map_err(Error::internal)?;
+        let commit = repo.find_commit(oid).map_err(GitError::internal)?;
         let pids: Vec<Oid> = commit.parent_ids().collect();
         parent_ids_of.insert(oid, pids.clone());
 
@@ -55,7 +55,7 @@ fn collect_commit_chain(
     }
 
     if !visited.contains(&target_oid) {
-        return Err(Error::CommitNotInChain {
+        return Err(GitError::CommitNotInChain {
             hash: target_oid.to_string(),
         });
     }
@@ -116,22 +116,22 @@ fn cherry_pick_onto(
     repo: &Repository,
     commit: &git2::Commit<'_>,
     new_parent: &git2::Commit<'_>,
-) -> Result<Oid, Error> {
+) -> Result<Oid, GitError> {
     let index = repo
         .cherrypick_commit(commit, new_parent, 0, None)
         .map_err(|e| {
             if e.code() == git2::ErrorCode::Conflict {
-                Error::CherryPickConflict {
+                GitError::CherryPickConflict {
                     hash: commit.id().to_string(),
                     details: e.message().to_owned(),
                 }
             } else {
-                Error::internal(e)
+                GitError::internal(e)
             }
         })?;
 
     if index.has_conflicts() {
-        return Err(Error::CherryPickConflict {
+        return Err(GitError::CherryPickConflict {
             hash: commit.id().to_string(),
             details: "merge produced conflicts".to_owned(),
         });
@@ -139,17 +139,17 @@ fn cherry_pick_onto(
 
     // Write the merged index as a tree
     let mut index = index;
-    let tree_oid = index.write_tree_to(repo).map_err(Error::internal)?;
+    let tree_oid = index.write_tree_to(repo).map_err(GitError::internal)?;
 
     // Detect empty cherry-pick (changes already applied)
-    let parent_tree_oid = new_parent.tree().map_err(Error::internal)?.id();
+    let parent_tree_oid = new_parent.tree().map_err(GitError::internal)?.id();
     if tree_oid == parent_tree_oid {
-        return Err(Error::CherryPickEmpty {
+        return Err(GitError::CherryPickEmpty {
             hash: commit.id().to_string(),
         });
     }
 
-    let tree = repo.find_tree(tree_oid).map_err(Error::internal)?;
+    let tree = repo.find_tree(tree_oid).map_err(GitError::internal)?;
 
     // Create commit preserving original author and committer exactly
     let new_oid = repo
@@ -161,7 +161,7 @@ fn cherry_pick_onto(
             &tree,
             &[new_parent],
         )
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     Ok(new_oid)
 }
@@ -171,7 +171,7 @@ fn cherry_pick_root(
     repo: &Repository,
     commit: &git2::Commit<'_>,
     new_parent: &git2::Commit<'_>,
-) -> Result<Oid, Error> {
+) -> Result<Oid, GitError> {
     // For a root commit being replayed onto a new parent, we use cherrypick_commit
     // which handles diffing against an empty tree
     cherry_pick_onto(repo, commit, new_parent)
@@ -186,14 +186,14 @@ fn reparent_commit(
     commit: &git2::Commit<'_>,
     replace_parent_index: usize,
     new_parent: &git2::Commit<'_>,
-) -> Result<Oid, Error> {
-    let tree = commit.tree().map_err(Error::internal)?;
+) -> Result<Oid, GitError> {
+    let tree = commit.tree().map_err(GitError::internal)?;
     let mut parents: Vec<git2::Commit<'_>> = Vec::with_capacity(commit.parent_count());
     for i in 0..commit.parent_count() {
         if i == replace_parent_index {
-            parents.push(repo.find_commit(new_parent.id()).map_err(Error::internal)?);
+            parents.push(repo.find_commit(new_parent.id()).map_err(GitError::internal)?);
         } else {
-            parents.push(commit.parent(i).map_err(Error::internal)?);
+            parents.push(commit.parent(i).map_err(GitError::internal)?);
         }
     }
     let parent_refs: Vec<&git2::Commit<'_>> = parents.iter().collect();
@@ -207,15 +207,15 @@ fn reparent_commit(
             &tree,
             &parent_refs,
         )
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     Ok(new_oid)
 }
 
-fn preflight_checks(repo: &Repository, auto_stash: bool) -> Result<bool, Error> {
+fn preflight_checks(repo: &Repository, auto_stash: bool) -> Result<bool, GitError> {
     // Check for detached HEAD
     if repo.head_detached().unwrap_or(false) {
-        return Err(Error::DetachedHead);
+        return Err(GitError::DetachedHead);
     }
 
     // Check for operation in progress
@@ -231,7 +231,7 @@ fn preflight_checks(repo: &Repository, auto_stash: bool) -> Result<bool, Error> 
     ];
     for f in &op_files {
         if git_dir.join(f).exists() {
-            return Err(Error::OperationInProgress);
+            return Err(GitError::OperationInProgress);
         }
     }
 
@@ -242,72 +242,72 @@ fn preflight_checks(repo: &Repository, auto_stash: bool) -> Result<bool, Error> 
                 .include_untracked(true)
                 .recurse_untracked_dirs(true),
         ))
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let is_dirty = statuses
         .iter()
         .any(|s| !s.status().is_empty() && s.status() != git2::Status::IGNORED);
 
     if is_dirty && !auto_stash {
-        return Err(Error::WorkingTreeDirty);
+        return Err(GitError::WorkingTreeDirty);
     }
 
     Ok(is_dirty)
 }
 
-fn stash_if_needed(repo: &mut Repository, is_dirty: bool) -> Result<bool, Error> {
+fn stash_if_needed(repo: &mut Repository, is_dirty: bool) -> Result<bool, GitError> {
     if !is_dirty {
         return Ok(false);
     }
-    let sig = repo.signature().map_err(Error::internal)?;
+    let sig = repo.signature().map_err(GitError::internal)?;
     let now = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
     let message = format!("reviser: auto-stash {now}");
     repo.stash_save(&sig, &message, Some(git2::StashFlags::INCLUDE_UNTRACKED))
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
     Ok(true)
 }
 
-fn pop_stash(repo: &mut Repository) -> Result<(), Error> {
-    repo.stash_pop(0, None).map_err(|e| Error::StashPopFailed {
+fn pop_stash(repo: &mut Repository) -> Result<(), GitError> {
+    repo.stash_pop(0, None).map_err(|e| GitError::StashPopFailed {
         message: e.message().to_owned(),
     })
 }
 
-fn create_backup_ref(repo: &Repository, branch: &str) -> Result<String, Error> {
+fn create_backup_ref(repo: &Repository, branch: &str) -> Result<String, GitError> {
     let head_oid = repo
         .head()
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .target()
-        .ok_or_else(|| Error::Internal {
+        .ok_or_else(|| GitError::Internal {
             message: "HEAD has no target".to_owned(),
         })?;
     let now = chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string();
     let refname = format!("refs/reviser/backups/{branch}/{now}");
     repo.reference(&refname, head_oid, true, "reviser backup")
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
     Ok(refname)
 }
 
 /// Update the branch ref + reset working tree to new HEAD.
-fn finalize(repo: &Repository, branch_refname: &str, new_tip: Oid) -> Result<(), Error> {
+fn finalize(repo: &Repository, branch_refname: &str, new_tip: Oid) -> Result<(), GitError> {
     // Update branch ref
     repo.reference(branch_refname, new_tip, true, "reviser rewrite")
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
     // Reset working tree to new HEAD
-    let obj = repo.find_object(new_tip, None).map_err(Error::internal)?;
+    let obj = repo.find_object(new_tip, None).map_err(GitError::internal)?;
     repo.reset(&obj, git2::ResetType::Hard, None)
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
     Ok(())
 }
 
-fn get_branch_refname(repo: &Repository) -> Result<String, Error> {
-    let head = repo.head().map_err(Error::internal)?;
+fn get_branch_refname(repo: &Repository) -> Result<String, GitError> {
+    let head = repo.head().map_err(GitError::internal)?;
     if !head.is_branch() {
-        return Err(Error::DetachedHead);
+        return Err(GitError::DetachedHead);
     }
     head.name()
         .map(str::to_owned)
-        .ok_or_else(|| Error::Internal {
+        .ok_or_else(|| GitError::Internal {
             message: "branch ref name is not UTF-8".to_owned(),
         })
 }
@@ -335,8 +335,8 @@ fn format_git2_time(time: &Time) -> String {
     }
 }
 
-fn parse_iso_date(iso: &str) -> Result<Time, Error> {
-    let dt = chrono::DateTime::parse_from_rfc3339(iso).map_err(|e| Error::Internal {
+fn parse_iso_date(iso: &str) -> Result<Time, GitError> {
+    let dt = chrono::DateTime::parse_from_rfc3339(iso).map_err(|e| GitError::Internal {
         message: format!("invalid ISO date '{iso}': {e}"),
     })?;
     Ok(Time::new(
@@ -356,27 +356,27 @@ fn replay_chain(
     repo: &Repository,
     rewrite_set: &[Oid],
     new_base_oid: Oid,
-) -> Result<(Oid, u32), Error> {
+) -> Result<(Oid, u32), GitError> {
     let mut oid_map: HashMap<Oid, Oid> = HashMap::new();
     oid_map.insert(rewrite_set[0], new_base_oid);
     let mut count = 0u32;
 
     for &oid in &rewrite_set[1..] {
-        let commit = repo.find_commit(oid).map_err(Error::internal)?;
+        let commit = repo.find_commit(oid).map_err(GitError::internal)?;
 
         // Resolve each parent through the oid_map
         let new_parents: Vec<git2::Commit<'_>> = commit
             .parent_ids()
             .map(|pid| {
                 let resolved = oid_map.get(&pid).copied().unwrap_or(pid);
-                repo.find_commit(resolved).map_err(Error::internal)
+                repo.find_commit(resolved).map_err(GitError::internal)
             })
             .collect::<Result<_, _>>()?;
         let parent_refs: Vec<&git2::Commit<'_>> = new_parents.iter().collect();
 
         let new_oid = if commit.parent_count() > 1 {
             // Merge: preserve tree, reparent with all resolved parents
-            let tree = commit.tree().map_err(Error::internal)?;
+            let tree = commit.tree().map_err(GitError::internal)?;
             repo.commit(
                 None,
                 &commit.author(),
@@ -385,7 +385,7 @@ fn replay_chain(
                 &tree,
                 &parent_refs,
             )
-            .map_err(Error::internal)?
+            .map_err(GitError::internal)?
         } else if commit.parent_count() == 0 {
             cherry_pick_root(repo, &commit, &new_parents[0])?
         } else {
@@ -404,15 +404,15 @@ fn replay_chain(
 // Public API — read-only queries
 // ---------------------------------------------------------------------------
 
-pub fn commit_metadata(repo_path: &str, commit_hash: &str) -> Result<CommitMetadataInfo, Error> {
+pub fn commit_metadata(repo_path: &str, commit_hash: &str) -> Result<CommitMetadataInfo, GitError> {
     let repo = open_git2(repo_path)?;
     let oid = repo
         .revparse_single(commit_hash)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: commit_hash.to_owned(),
         })?
         .id();
-    let commit = repo.find_commit(oid).map_err(Error::internal)?;
+    let commit = repo.find_commit(oid).map_err(GitError::internal)?;
 
     let author = commit.author();
     let committer = commit.committer();
@@ -429,7 +429,7 @@ pub fn commit_metadata(repo_path: &str, commit_hash: &str) -> Result<CommitMetad
     Ok(info)
 }
 
-pub fn prune_backup_refs(repo_path: &str, retention_days: u32) -> Result<u32, Error> {
+pub fn prune_backup_refs(repo_path: &str, retention_days: u32) -> Result<u32, GitError> {
     if retention_days == 0 {
         return Ok(0);
     }
@@ -440,7 +440,7 @@ pub fn prune_backup_refs(repo_path: &str, retention_days: u32) -> Result<u32, Er
 
     let refs: Vec<String> = repo
         .references_glob("refs/reviser/backups/*")
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .filter_map(Result::ok)
         .filter_map(|r| r.name().map(str::to_owned))
         .collect();
@@ -474,38 +474,38 @@ pub fn rewrite_commit_author(
     new_name: &str,
     new_email: &str,
     auto_stash: bool,
-) -> Result<RewriteResult, Error> {
+) -> Result<RewriteResult, GitError> {
     let mut repo = open_git2(repo_path)?;
     let branch_refname = get_branch_refname(&repo)?;
     let branch_short = get_branch_short_name(&branch_refname).to_owned();
 
     let target_oid = repo
         .revparse_single(commit_hash)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: commit_hash.to_owned(),
         })?
         .id();
-    let head_oid = repo.head().map_err(Error::internal)?.target().unwrap();
+    let head_oid = repo.head().map_err(GitError::internal)?.target().unwrap();
 
     let is_dirty = preflight_checks(&repo, auto_stash)?;
     let stashed = stash_if_needed(&mut repo, is_dirty)?;
     let backup_ref = create_backup_ref(&repo, &branch_short)?;
 
-    let result = (|| -> Result<RewriteResult, Error> {
+    let result = (|| -> Result<RewriteResult, GitError> {
         let chain = collect_commit_chain(&repo, target_oid, head_oid)?;
-        let original = repo.find_commit(target_oid).map_err(Error::internal)?;
+        let original = repo.find_commit(target_oid).map_err(GitError::internal)?;
 
         // Create new target commit with modified author
         let new_author = Signature::new(new_name, new_email, &original.author().when())
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
         // Also update committer name/email but keep committer timestamp
         let new_committer = Signature::new(new_name, new_email, &original.committer().when())
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
 
-        let tree = original.tree().map_err(Error::internal)?;
+        let tree = original.tree().map_err(GitError::internal)?;
         let parents: Vec<git2::Commit<'_>> = original
             .parent_ids()
-            .map(|id| repo.find_commit(id).map_err(Error::internal))
+            .map(|id| repo.find_commit(id).map_err(GitError::internal))
             .collect::<Result<_, _>>()?;
         let parent_refs: Vec<&git2::Commit<'_>> = parents.iter().collect();
 
@@ -518,7 +518,7 @@ pub fn rewrite_commit_author(
                 &tree,
                 &parent_refs,
             )
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
 
         let (new_tip, replayed) = replay_chain(&repo, &chain, new_target_oid)?;
         finalize(&repo, &branch_refname, new_tip)?;
@@ -545,26 +545,26 @@ pub fn rewrite_commit_date(
     commit_hash: &str,
     new_date_iso: &str,
     auto_stash: bool,
-) -> Result<RewriteResult, Error> {
+) -> Result<RewriteResult, GitError> {
     let mut repo = open_git2(repo_path)?;
     let branch_refname = get_branch_refname(&repo)?;
     let branch_short = get_branch_short_name(&branch_refname).to_owned();
 
     let target_oid = repo
         .revparse_single(commit_hash)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: commit_hash.to_owned(),
         })?
         .id();
-    let head_oid = repo.head().map_err(Error::internal)?.target().unwrap();
+    let head_oid = repo.head().map_err(GitError::internal)?.target().unwrap();
 
     let is_dirty = preflight_checks(&repo, auto_stash)?;
     let stashed = stash_if_needed(&mut repo, is_dirty)?;
     let backup_ref = create_backup_ref(&repo, &branch_short)?;
 
-    let result = (|| -> Result<RewriteResult, Error> {
+    let result = (|| -> Result<RewriteResult, GitError> {
         let chain = collect_commit_chain(&repo, target_oid, head_oid)?;
-        let original = repo.find_commit(target_oid).map_err(Error::internal)?;
+        let original = repo.find_commit(target_oid).map_err(GitError::internal)?;
         let new_time = parse_iso_date(new_date_iso)?;
 
         let new_author = Signature::new(
@@ -572,18 +572,18 @@ pub fn rewrite_commit_date(
             original.author().email().unwrap_or(""),
             &new_time,
         )
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
         let new_committer = Signature::new(
             original.committer().name().unwrap_or(""),
             original.committer().email().unwrap_or(""),
             &new_time,
         )
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
-        let tree = original.tree().map_err(Error::internal)?;
+        let tree = original.tree().map_err(GitError::internal)?;
         let parents: Vec<git2::Commit<'_>> = original
             .parent_ids()
-            .map(|id| repo.find_commit(id).map_err(Error::internal))
+            .map(|id| repo.find_commit(id).map_err(GitError::internal))
             .collect::<Result<_, _>>()?;
         let parent_refs: Vec<&git2::Commit<'_>> = parents.iter().collect();
 
@@ -596,7 +596,7 @@ pub fn rewrite_commit_date(
                 &tree,
                 &parent_refs,
             )
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
 
         let (new_tip, replayed) = replay_chain(&repo, &chain, new_target_oid)?;
         finalize(&repo, &branch_refname, new_tip)?;
@@ -623,31 +623,31 @@ pub fn rewrite_commit_message(
     commit_hash: &str,
     new_message: &str,
     auto_stash: bool,
-) -> Result<RewriteResult, Error> {
+) -> Result<RewriteResult, GitError> {
     let mut repo = open_git2(repo_path)?;
     let branch_refname = get_branch_refname(&repo)?;
     let branch_short = get_branch_short_name(&branch_refname).to_owned();
 
     let target_oid = repo
         .revparse_single(commit_hash)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: commit_hash.to_owned(),
         })?
         .id();
-    let head_oid = repo.head().map_err(Error::internal)?.target().unwrap();
+    let head_oid = repo.head().map_err(GitError::internal)?.target().unwrap();
 
     let is_dirty = preflight_checks(&repo, auto_stash)?;
     let stashed = stash_if_needed(&mut repo, is_dirty)?;
     let backup_ref = create_backup_ref(&repo, &branch_short)?;
 
-    let result = (|| -> Result<RewriteResult, Error> {
+    let result = (|| -> Result<RewriteResult, GitError> {
         let chain = collect_commit_chain(&repo, target_oid, head_oid)?;
-        let original = repo.find_commit(target_oid).map_err(Error::internal)?;
+        let original = repo.find_commit(target_oid).map_err(GitError::internal)?;
 
-        let tree = original.tree().map_err(Error::internal)?;
+        let tree = original.tree().map_err(GitError::internal)?;
         let parents: Vec<git2::Commit<'_>> = original
             .parent_ids()
-            .map(|id| repo.find_commit(id).map_err(Error::internal))
+            .map(|id| repo.find_commit(id).map_err(GitError::internal))
             .collect::<Result<_, _>>()?;
         let parent_refs: Vec<&git2::Commit<'_>> = parents.iter().collect();
 
@@ -660,7 +660,7 @@ pub fn rewrite_commit_message(
                 &tree,
                 &parent_refs,
             )
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
 
         let (new_tip, replayed) = replay_chain(&repo, &chain, new_target_oid)?;
         finalize(&repo, &branch_refname, new_tip)?;
@@ -686,24 +686,24 @@ pub fn rewrite_commit_message(
 // Public API — cherry-pick
 // ---------------------------------------------------------------------------
 
-pub fn cherry_pick(repo_path: &str, commit_hash: &str, auto_stash: bool) -> Result<String, Error> {
+pub fn cherry_pick(repo_path: &str, commit_hash: &str, auto_stash: bool) -> Result<String, GitError> {
     let mut repo = open_git2(repo_path)?;
     let branch_refname = get_branch_refname(&repo)?;
 
     let source_oid = repo
         .revparse_single(commit_hash)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: commit_hash.to_owned(),
         })?
         .id();
-    let head_oid = repo.head().map_err(Error::internal)?.target().unwrap();
+    let head_oid = repo.head().map_err(GitError::internal)?.target().unwrap();
 
     let is_dirty = preflight_checks(&repo, auto_stash)?;
     let stashed = stash_if_needed(&mut repo, is_dirty)?;
 
-    let result = (|| -> Result<String, Error> {
-        let source_commit = repo.find_commit(source_oid).map_err(Error::internal)?;
-        let head_commit = repo.find_commit(head_oid).map_err(Error::internal)?;
+    let result = (|| -> Result<String, GitError> {
+        let source_commit = repo.find_commit(source_oid).map_err(GitError::internal)?;
+        let head_commit = repo.find_commit(head_oid).map_err(GitError::internal)?;
         let new_oid = cherry_pick_onto(&repo, &source_commit, &head_commit)?;
 
         finalize(&repo, &branch_refname, new_oid)?;
@@ -731,7 +731,7 @@ pub fn cherry_pick_to_branch(
     commit_hash: &str,
     target_branch: &str,
     auto_stash: bool,
-) -> Result<String, Error> {
+) -> Result<String, GitError> {
     let target_refname = format!("refs/heads/{target_branch}");
 
     let repo = open_git2(repo_path)?;
@@ -739,7 +739,7 @@ pub fn cherry_pick_to_branch(
     // Resolve the source commit
     let source_oid = repo
         .revparse_single(commit_hash)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: commit_hash.to_owned(),
         })?
         .id();
@@ -747,10 +747,10 @@ pub fn cherry_pick_to_branch(
     // Resolve the target branch tip
     let target_ref = repo
         .find_reference(&target_refname)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: target_branch.to_owned(),
         })?;
-    let target_oid = target_ref.target().ok_or_else(|| Error::Internal {
+    let target_oid = target_ref.target().ok_or_else(|| GitError::Internal {
         message: format!("branch {target_branch} has no target"),
     })?;
 
@@ -766,13 +766,13 @@ pub fn cherry_pick_to_branch(
     }
 
     // For non-HEAD branches: no stash needed (working tree unaffected).
-    let source_commit = repo.find_commit(source_oid).map_err(Error::internal)?;
-    let target_commit = repo.find_commit(target_oid).map_err(Error::internal)?;
+    let source_commit = repo.find_commit(source_oid).map_err(GitError::internal)?;
+    let target_commit = repo.find_commit(target_oid).map_err(GitError::internal)?;
     let new_oid = cherry_pick_onto(&repo, &source_commit, &target_commit)?;
 
     // Update only the branch ref — do NOT reset the working tree.
     repo.reference(&target_refname, new_oid, true, "cuttlefish cherry-pick")
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     Ok(new_oid.to_string())
 }
@@ -786,32 +786,32 @@ fn merge_fixup_trees(
     target_oids: &[Oid],
     earliest_oid: Oid,
     start_tree_oid: git2::Oid,
-) -> Result<git2::Oid, Error> {
+) -> Result<git2::Oid, GitError> {
     let mut merged_tree_oid = start_tree_oid;
     for &oid in target_oids {
         if oid == earliest_oid {
             continue;
         }
-        let fixup_commit = repo.find_commit(oid).map_err(Error::internal)?;
-        let fixup_tree = fixup_commit.tree().map_err(Error::internal)?;
+        let fixup_commit = repo.find_commit(oid).map_err(GitError::internal)?;
+        let fixup_tree = fixup_commit.tree().map_err(GitError::internal)?;
         let ancestor_tree = if fixup_commit.parent_count() > 0 {
-            fixup_commit.parent(0).map_err(Error::internal)?.tree().map_err(Error::internal)?
+            fixup_commit.parent(0).map_err(GitError::internal)?.tree().map_err(GitError::internal)?
         } else {
-            repo.find_tree(repo.treebuilder(None).map_err(Error::internal)?.write().map_err(Error::internal)?).map_err(Error::internal)?
+            repo.find_tree(repo.treebuilder(None).map_err(GitError::internal)?.write().map_err(GitError::internal)?).map_err(GitError::internal)?
         };
-        let our_tree = repo.find_tree(merged_tree_oid).map_err(Error::internal)?;
+        let our_tree = repo.find_tree(merged_tree_oid).map_err(GitError::internal)?;
         let mut index = repo.merge_trees(&ancestor_tree, &our_tree, &fixup_tree, None)
             .map_err(|e| if e.code() == git2::ErrorCode::Conflict {
-                Error::CherryPickConflict { hash: oid.to_string(), details: e.message().to_owned() }
+                GitError::CherryPickConflict { hash: oid.to_string(), details: e.message().to_owned() }
             } else {
-                Error::internal(e)
+                GitError::internal(e)
             })?;
         if index.has_conflicts() {
-            return Err(Error::CherryPickConflict {
+            return Err(GitError::CherryPickConflict {
                 hash: oid.to_string(), details: "fixup produced conflicts".to_owned(),
             });
         }
-        merged_tree_oid = index.write_tree_to(repo).map_err(Error::internal)?;
+        merged_tree_oid = index.write_tree_to(repo).map_err(GitError::internal)?;
     }
     Ok(merged_tree_oid)
 }
@@ -820,7 +820,7 @@ pub fn fixup_commits(
     repo_path: &str,
     commit_hashes: &[String],
     auto_stash: bool,
-) -> Result<RewriteResult, Error> {
+) -> Result<RewriteResult, GitError> {
     if commit_hashes.is_empty() {
         return Ok(RewriteResult {
             new_head: String::new(),
@@ -832,14 +832,14 @@ pub fn fixup_commits(
     let mut repo = open_git2(repo_path)?;
     let branch_refname = get_branch_refname(&repo)?;
     let branch_short = get_branch_short_name(&branch_refname).to_owned();
-    let head_oid = repo.head().map_err(Error::internal)?.target().unwrap();
+    let head_oid = repo.head().map_err(GitError::internal)?.target().unwrap();
 
     // Resolve all hashes to OIDs
     let mut target_oids: Vec<Oid> = Vec::new();
     for hash in commit_hashes {
         let oid = repo
             .revparse_single(hash)
-            .map_err(|_| Error::RevNotFound { rev: hash.clone() })?
+            .map_err(|_| GitError::RevNotFound { rev: hash.clone() })?
             .id();
         target_oids.push(oid);
     }
@@ -848,13 +848,13 @@ pub fn fixup_commits(
     let stashed = stash_if_needed(&mut repo, is_dirty)?;
     let backup_ref = create_backup_ref(&repo, &branch_short)?;
 
-    let result = (|| -> Result<RewriteResult, Error> {
+    let result = (|| -> Result<RewriteResult, GitError> {
         // Walk from HEAD to find the earliest selected commit
         let mut all_chain = Vec::new();
         let mut current = head_oid;
         loop {
             all_chain.push(current);
-            let commit = repo.find_commit(current).map_err(Error::internal)?;
+            let commit = repo.find_commit(current).map_err(GitError::internal)?;
             let parents: Vec<_> = commit.parent_ids().collect();
             if parents.is_empty() {
                 break;
@@ -870,21 +870,21 @@ pub fn fixup_commits(
         let earliest_idx = all_chain
             .iter()
             .position(|oid| target_set.contains(oid))
-            .ok_or_else(|| Error::CommitNotInChain {
+            .ok_or_else(|| GitError::CommitNotInChain {
                 hash: commit_hashes[0].clone(),
             })?;
 
         let earliest_oid = all_chain[earliest_idx];
-        let earliest_commit = repo.find_commit(earliest_oid).map_err(Error::internal)?;
+        let earliest_commit = repo.find_commit(earliest_oid).map_err(GitError::internal)?;
 
         let merged_tree_oid =
             merge_fixup_trees(&repo, &target_oids, earliest_oid, earliest_commit.tree_id())?;
 
         // Create the squashed commit with the earliest commit's metadata
-        let merged_tree = repo.find_tree(merged_tree_oid).map_err(Error::internal)?;
+        let merged_tree = repo.find_tree(merged_tree_oid).map_err(GitError::internal)?;
         let parents: Vec<git2::Commit<'_>> = earliest_commit
             .parent_ids()
-            .map(|id| repo.find_commit(id).map_err(Error::internal))
+            .map(|id| repo.find_commit(id).map_err(GitError::internal))
             .collect::<Result<_, _>>()?;
         let parent_refs: Vec<&git2::Commit<'_>> = parents.iter().collect();
 
@@ -897,7 +897,7 @@ pub fn fixup_commits(
                 &merged_tree,
                 &parent_refs,
             )
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
 
         // Replay non-selected commits after earliest
         let mut current_parent_oid = squashed_oid;
@@ -908,10 +908,10 @@ pub fn fixup_commits(
                 // Skip fixup commits — their changes are already merged
                 continue;
             }
-            let commit = repo.find_commit(oid).map_err(Error::internal)?;
+            let commit = repo.find_commit(oid).map_err(GitError::internal)?;
             let new_parent = repo
                 .find_commit(current_parent_oid)
-                .map_err(Error::internal)?;
+                .map_err(GitError::internal)?;
             current_parent_oid = if commit.parent_count() > 1 {
                 reparent_commit(&repo, &commit, 0, &new_parent)?
             } else {
@@ -947,7 +947,7 @@ pub fn drop_commits(
     repo_path: &str,
     commit_hashes: &[String],
     auto_stash: bool,
-) -> Result<RewriteResult, Error> {
+) -> Result<RewriteResult, GitError> {
     if commit_hashes.is_empty() {
         return Ok(RewriteResult {
             new_head: String::new(),
@@ -959,13 +959,13 @@ pub fn drop_commits(
     let mut repo = open_git2(repo_path)?;
     let branch_refname = get_branch_refname(&repo)?;
     let branch_short = get_branch_short_name(&branch_refname).to_owned();
-    let head_oid = repo.head().map_err(Error::internal)?.target().unwrap();
+    let head_oid = repo.head().map_err(GitError::internal)?.target().unwrap();
 
     let mut target_oids: Vec<Oid> = Vec::new();
     for hash in commit_hashes {
         let oid = repo
             .revparse_single(hash)
-            .map_err(|_| Error::RevNotFound { rev: hash.clone() })?
+            .map_err(|_| GitError::RevNotFound { rev: hash.clone() })?
             .id();
         target_oids.push(oid);
     }
@@ -974,12 +974,12 @@ pub fn drop_commits(
     let stashed = stash_if_needed(&mut repo, is_dirty)?;
     let backup_ref = create_backup_ref(&repo, &branch_short)?;
 
-    let result = (|| -> Result<RewriteResult, Error> {
+    let result = (|| -> Result<RewriteResult, GitError> {
         let mut all_chain = Vec::new();
         let mut current = head_oid;
         loop {
             all_chain.push(current);
-            let commit = repo.find_commit(current).map_err(Error::internal)?;
+            let commit = repo.find_commit(current).map_err(GitError::internal)?;
             let parents: Vec<_> = commit.parent_ids().collect();
             if parents.is_empty() {
                 break;
@@ -993,18 +993,18 @@ pub fn drop_commits(
         let earliest_idx = all_chain
             .iter()
             .position(|oid| target_set.contains(oid))
-            .ok_or_else(|| Error::CommitNotInChain {
+            .ok_or_else(|| GitError::CommitNotInChain {
                 hash: commit_hashes[0].clone(),
             })?;
 
         let earliest_commit = repo
             .find_commit(all_chain[earliest_idx])
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
 
         let mut current_parent_oid = if earliest_commit.parent_count() > 0 {
-            earliest_commit.parent_id(0).map_err(Error::internal)?
+            earliest_commit.parent_id(0).map_err(GitError::internal)?
         } else {
-            return Err(Error::Internal {
+            return Err(GitError::Internal {
                 message: "Cannot drop the root commit".to_owned(),
             });
         };
@@ -1015,10 +1015,10 @@ pub fn drop_commits(
             if target_set.contains(&oid) {
                 continue;
             }
-            let commit = repo.find_commit(oid).map_err(Error::internal)?;
+            let commit = repo.find_commit(oid).map_err(GitError::internal)?;
             let new_parent = repo
                 .find_commit(current_parent_oid)
-                .map_err(Error::internal)?;
+                .map_err(GitError::internal)?;
             current_parent_oid = if commit.parent_count() > 1 {
                 reparent_commit(&repo, &commit, 0, &new_parent)?
             } else {

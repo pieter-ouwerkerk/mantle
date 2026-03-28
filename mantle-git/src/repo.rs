@@ -2,12 +2,12 @@ use std::path::Path;
 
 use gix::ThreadSafeRepository;
 
-use crate::error::Error;
+use crate::error::GitError;
 
-pub(crate) fn open(path: &str) -> Result<ThreadSafeRepository, Error> {
+pub(crate) fn open(path: &str) -> Result<ThreadSafeRepository, GitError> {
     let p = Path::new(path);
     if !p.exists() {
-        return Err(Error::RepoNotFound {
+        return Err(GitError::RepoNotFound {
             path: path.to_owned(),
         });
     }
@@ -16,11 +16,11 @@ pub(crate) fn open(path: &str) -> Result<ThreadSafeRepository, Error> {
             || e.to_string().contains("Missing")
             || e.to_string().contains("missing")
         {
-            Error::NotARepo {
+            GitError::NotARepo {
                 path: path.to_owned(),
             }
         } else {
-            Error::internal(e)
+            GitError::internal(e)
         }
     })
 }

@@ -3,11 +3,11 @@ use gix::object::tree::diff::Action;
 use gix::revision::walk::Sorting;
 use gix::traverse::commit::simple::CommitTimeOrder;
 
-use crate::error::Error;
+use crate::error::GitError;
 use crate::repo;
 use crate::types::CommitInfo;
 
-pub fn log(repo_path: &str, max_count: u32, skip: u32) -> Result<Vec<CommitInfo>, Error> {
+pub fn log(repo_path: &str, max_count: u32, skip: u32) -> Result<Vec<CommitInfo>, GitError> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
 
@@ -19,7 +19,7 @@ pub fn log(repo_path: &str, max_count: u32, skip: u32) -> Result<Vec<CommitInfo>
         .ancestors()
         .sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst))
         .all()
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let limit = if max_count == 0 {
         usize::MAX
@@ -34,7 +34,7 @@ pub fn log(repo_path: &str, max_count: u32, skip: u32) -> Result<Vec<CommitInfo>
         if commits.len() >= limit {
             break;
         }
-        let info = info.map_err(Error::internal)?;
+        let info = info.map_err(GitError::internal)?;
         if skipped < skip_count {
             skipped += 1;
             continue;
@@ -42,9 +42,9 @@ pub fn log(repo_path: &str, max_count: u32, skip: u32) -> Result<Vec<CommitInfo>
         let commit = info
             .id()
             .object()
-            .map_err(Error::internal)?
+            .map_err(GitError::internal)?
             .try_into_commit()
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
         commits.push(commit_to_info(&commit)?);
     }
 
@@ -56,13 +56,13 @@ pub fn log_for_ref(
     git_ref: &str,
     max_count: u32,
     skip: u32,
-) -> Result<Vec<CommitInfo>, Error> {
+) -> Result<Vec<CommitInfo>, GitError> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
 
     let object = repo
         .rev_parse_single(git_ref)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: git_ref.to_owned(),
         })?;
 
@@ -70,7 +70,7 @@ pub fn log_for_ref(
         .ancestors()
         .sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst))
         .all()
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let limit = if max_count == 0 {
         usize::MAX
@@ -85,7 +85,7 @@ pub fn log_for_ref(
         if commits.len() >= limit {
             break;
         }
-        let info = info.map_err(Error::internal)?;
+        let info = info.map_err(GitError::internal)?;
         if skipped < skip_count {
             skipped += 1;
             continue;
@@ -93,9 +93,9 @@ pub fn log_for_ref(
         let commit = info
             .id()
             .object()
-            .map_err(Error::internal)?
+            .map_err(GitError::internal)?
             .try_into_commit()
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
         commits.push(commit_to_info(&commit)?);
     }
 
@@ -106,30 +106,30 @@ pub fn log_for_path(
     worktree_path: &str,
     max_count: u32,
     skip: u32,
-) -> Result<Vec<CommitInfo>, Error> {
+) -> Result<Vec<CommitInfo>, GitError> {
     // logForPath in the shell version just runs git log in the worktree directory.
     // With gix, opening the worktree path discovers the correct repo.
     log(worktree_path, max_count, skip)
 }
 
-pub fn full_message(repo_path: &str, commit_hash: &str) -> Result<String, Error> {
+pub fn full_message(repo_path: &str, commit_hash: &str) -> Result<String, GitError> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
     let object = repo
         .rev_parse_single(commit_hash)
-        .map_err(|_| Error::RevNotFound {
+        .map_err(|_| GitError::RevNotFound {
             rev: commit_hash.to_owned(),
         })?;
     let commit = object
         .object()
-        .map_err(Error::internal)?
+        .map_err(GitError::internal)?
         .try_into_commit()
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
     let msg = commit.message_raw_sloppy().to_str_lossy().to_string();
     Ok(msg.trim().to_owned())
 }
 
-pub fn recent_commits_for_context(repo_path: &str, count: u32) -> Result<String, Error> {
+pub fn recent_commits_for_context(repo_path: &str, count: u32) -> Result<String, GitError> {
     let commits = log(repo_path, count, 0)?;
     let lines: Vec<String> = commits
         .iter()
@@ -146,7 +146,7 @@ pub fn log_by_file(
     pattern: &str,
     max_count: u32,
     skip: u32,
-) -> Result<Vec<CommitInfo>, Error> {
+) -> Result<Vec<CommitInfo>, GitError> {
     let pat = pattern.to_owned();
     log_with_path_filter(repo_path, max_count, skip, &|path: &str| {
         path.contains(&*pat)
@@ -158,7 +158,7 @@ pub fn log_for_paths(
     paths: &[String],
     max_count: u32,
     skip: u32,
-) -> Result<Vec<CommitInfo>, Error> {
+) -> Result<Vec<CommitInfo>, GitError> {
     let owned: Vec<String> = paths.to_vec();
     log_with_path_filter(repo_path, max_count, skip, &|path: &str| {
         owned.iter().any(|p| path == p.as_str())
@@ -170,7 +170,7 @@ fn log_with_path_filter(
     max_count: u32,
     skip: u32,
     matches: &dyn Fn(&str) -> bool,
-) -> Result<Vec<CommitInfo>, Error> {
+) -> Result<Vec<CommitInfo>, GitError> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
 
@@ -182,7 +182,7 @@ fn log_with_path_filter(
         .ancestors()
         .sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst))
         .all()
-        .map_err(Error::internal)?;
+        .map_err(GitError::internal)?;
 
     let limit = if max_count == 0 {
         usize::MAX
@@ -198,9 +198,9 @@ fn log_with_path_filter(
         if commits.len() >= limit {
             break;
         }
-        let info = info.map_err(Error::internal)?;
-        let commit_obj = info.id().object().map_err(Error::internal)?;
-        let commit = commit_obj.try_into_commit().map_err(Error::internal)?;
+        let info = info.map_err(GitError::internal)?;
+        let commit_obj = info.id().object().map_err(GitError::internal)?;
+        let commit = commit_obj.try_into_commit().map_err(GitError::internal)?;
 
         if commit_touches_paths(&repo, &commit, matches)? {
             if skipped < skip_count {
@@ -221,8 +221,8 @@ fn commit_touches_paths(
     repo: &gix::Repository,
     commit: &gix::Commit<'_>,
     matches: &dyn Fn(&str) -> bool,
-) -> Result<bool, Error> {
-    let tree = commit.tree().map_err(Error::internal)?;
+) -> Result<bool, GitError> {
+    let tree = commit.tree().map_err(GitError::internal)?;
 
     let parent_tree = commit
         .parent_ids()
@@ -235,7 +235,7 @@ fn commit_touches_paths(
         Some(ptree) => {
             // Use gix tree diff callback API
             let mut found = false;
-            let mut changes_platform = ptree.changes().map_err(Error::internal)?;
+            let mut changes_platform = ptree.changes().map_err(GitError::internal)?;
             let diff_result = changes_platform.for_each_to_obtain_tree(
                 &tree,
                 |change| -> Result<Action, std::convert::Infallible> {
@@ -252,7 +252,7 @@ fn commit_touches_paths(
             // Err("The delegate cancelled the operation"). That's expected
             // — only propagate errors when we didn't find a match.
             if !found {
-                diff_result.map_err(Error::internal)?;
+                diff_result.map_err(GitError::internal)?;
             }
             Ok(found)
         }
@@ -269,9 +269,9 @@ fn tree_contains_matching_path(
     tree: &gix::Tree<'_>,
     prefix: &str,
     matches: &dyn Fn(&str) -> bool,
-) -> Result<bool, Error> {
+) -> Result<bool, GitError> {
     for entry in tree.iter() {
-        let entry = entry.map_err(Error::internal)?;
+        let entry = entry.map_err(GitError::internal)?;
         let name = entry.filename().to_str_lossy();
         let full_path = if prefix.is_empty() {
             name.to_string()
@@ -282,8 +282,8 @@ fn tree_contains_matching_path(
         if entry.mode().is_tree() {
             if let Ok(subtree) = repo
                 .find_object(entry.oid())
-                .map_err(Error::internal)
-                .and_then(|obj| obj.try_into_tree().map_err(Error::internal))
+                .map_err(GitError::internal)
+                .and_then(|obj| obj.try_into_tree().map_err(GitError::internal))
             {
                 if tree_contains_matching_path(repo, &subtree, &full_path, matches)? {
                     return Ok(true);
@@ -296,9 +296,9 @@ fn tree_contains_matching_path(
     Ok(false)
 }
 
-fn commit_to_info(commit: &gix::Commit<'_>) -> Result<CommitInfo, Error> {
-    let author = commit.author().map_err(Error::internal)?;
-    let committer = commit.committer().map_err(Error::internal)?;
+fn commit_to_info(commit: &gix::Commit<'_>) -> Result<CommitInfo, GitError> {
+    let author = commit.author().map_err(GitError::internal)?;
+    let committer = commit.committer().map_err(GitError::internal)?;
     let message_raw = commit.message_raw_sloppy();
     // Subject is first line only
     let message = message_raw
@@ -317,7 +317,7 @@ fn commit_to_info(commit: &gix::Commit<'_>) -> Result<CommitInfo, Error> {
         author_email: author.email.to_string(),
         committer_name: committer.name.to_string(),
         committer_email: committer.email.to_string(),
-        author_date: format_gix_time(author.time().map_err(Error::internal)?),
+        author_date: format_gix_time(author.time().map_err(GitError::internal)?),
         message,
         parent_hashes,
     })

@@ -1,8 +1,8 @@
-use crate::error::Error;
+use crate::error::GitError;
 use crate::types::TagInfo;
 
-fn open_git2(repo_path: &str) -> Result<git2::Repository, Error> {
-    git2::Repository::open(repo_path).map_err(Error::internal)
+fn open_git2(repo_path: &str) -> Result<git2::Repository, GitError> {
+    git2::Repository::open(repo_path).map_err(GitError::internal)
 }
 
 fn format_git2_time(time: &git2::Time) -> String {
@@ -23,7 +23,7 @@ fn format_git2_time(time: &git2::Time) -> String {
     }
 }
 
-pub fn list_tags(repo_path: &str) -> Result<Vec<TagInfo>, Error> {
+pub fn list_tags(repo_path: &str) -> Result<Vec<TagInfo>, GitError> {
     let repo = open_git2(repo_path)?;
     let mut tags = Vec::new();
 
@@ -80,7 +80,7 @@ pub fn list_tags(repo_path: &str) -> Result<Vec<TagInfo>, Error> {
         }
         true // continue iteration
     })
-    .map_err(Error::internal)?;
+    .map_err(GitError::internal)?;
 
     tags.sort_by(|a, b| b.name.cmp(&a.name));
     Ok(tags)
@@ -93,30 +93,30 @@ pub fn create_tag(
     name: &str,
     target_hash: &str,
     message: Option<String>,
-) -> Result<(), Error> {
+) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
-    let oid = git2::Oid::from_str(target_hash).map_err(Error::internal)?;
-    let obj = repo.find_object(oid, None).map_err(Error::internal)?;
+    let oid = git2::Oid::from_str(target_hash).map_err(GitError::internal)?;
+    let obj = repo.find_object(oid, None).map_err(GitError::internal)?;
 
     if let Some(msg) = message {
-        let sig = repo.signature().map_err(Error::internal)?;
+        let sig = repo.signature().map_err(GitError::internal)?;
         repo.tag(name, &obj, &sig, &msg, false)
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
     } else {
         repo.tag_lightweight(name, &obj, false)
-            .map_err(Error::internal)?;
+            .map_err(GitError::internal)?;
     }
 
     Ok(())
 }
 
 /// Delete a tag by name.
-pub fn delete_tag(repo_path: &str, name: &str) -> Result<(), Error> {
+pub fn delete_tag(repo_path: &str, name: &str) -> Result<(), GitError> {
     let repo = open_git2(repo_path)?;
     let refname = format!("refs/tags/{name}");
-    let mut reference = repo.find_reference(&refname).map_err(|_| Error::Internal {
+    let mut reference = repo.find_reference(&refname).map_err(|_| GitError::Internal {
         message: format!("tag '{name}' not found"),
     })?;
-    reference.delete().map_err(Error::internal)?;
+    reference.delete().map_err(GitError::internal)?;
     Ok(())
 }

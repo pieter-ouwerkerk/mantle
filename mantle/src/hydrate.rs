@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::time::Instant;
 
-use mantle_git::{cow_clone_directory, scan_worktreeinclude, Error, HydrationStrategy};
+use mantle_git::{cow_clone_directory, scan_worktreeinclude, GitError, HydrationStrategy};
 
 /// Result of a hydration operation.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -20,7 +20,7 @@ pub fn hydrate(
     repo_path: &str,
     worktree_path: &str,
     exclude: &[String],
-) -> Result<HydrationResult, Error> {
+) -> Result<HydrationResult, GitError> {
     let start = Instant::now();
 
     let scan_result = scan_worktreeinclude(repo_path.to_string(), worktree_path.to_string(), true)?;
