@@ -6,6 +6,8 @@ mod cmd_init;
 mod cmd_worktree;
 mod config;
 mod permissions;
+#[cfg(feature = "cuttlefish-app")]
+mod socket;
 mod util;
 
 #[derive(Parser)]

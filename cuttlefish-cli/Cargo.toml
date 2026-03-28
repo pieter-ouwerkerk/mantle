@@ -10,6 +10,10 @@ repository = "https://github.com/pieter-ouwerkerk/mantle"
 name = "cuttlefish"
 path = "src/main.rs"
 
+[features]
+default = []
+cuttlefish-app = []
+
 [dependencies]
 mantle = { path = "../mantle" }
 mantle-git = { path = "../mantle-git" }
