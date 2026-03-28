@@ -4,6 +4,7 @@ mod cmd_hook;
 mod cmd_hydrate;
 mod cmd_init;
 mod cmd_worktree;
+mod config;
 mod permissions;
 mod util;
 
