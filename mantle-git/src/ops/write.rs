@@ -103,11 +103,9 @@ pub fn delete_ref(repo_path: &str, refname: &str) -> Result<(), Error> {
 /// Hard reset to a revision (equivalent to `git reset --hard <rev>`).
 pub fn reset_hard(repo_path: &str, rev: &str) -> Result<(), Error> {
     let repo = open_git2(repo_path)?;
-    let obj = repo
-        .revparse_single(rev)
-        .map_err(|_| Error::RevNotFound {
-            rev: rev.to_owned(),
-        })?;
+    let obj = repo.revparse_single(rev).map_err(|_| Error::RevNotFound {
+        rev: rev.to_owned(),
+    })?;
     repo.reset(&obj, git2::ResetType::Hard, None)
         .map_err(Error::internal)?;
     Ok(())
@@ -117,11 +115,9 @@ pub fn reset_hard(repo_path: &str, rev: &str) -> Result<(), Error> {
 /// Moves HEAD but leaves both index and working tree unchanged.
 pub fn reset_soft(repo_path: &str, rev: &str) -> Result<(), Error> {
     let repo = open_git2(repo_path)?;
-    let obj = repo
-        .revparse_single(rev)
-        .map_err(|_| Error::RevNotFound {
-            rev: rev.to_owned(),
-        })?;
+    let obj = repo.revparse_single(rev).map_err(|_| Error::RevNotFound {
+        rev: rev.to_owned(),
+    })?;
     repo.reset(&obj, git2::ResetType::Soft, None)
         .map_err(Error::internal)?;
     Ok(())
@@ -131,11 +127,9 @@ pub fn reset_soft(repo_path: &str, rev: &str) -> Result<(), Error> {
 /// Moves HEAD and resets the index, but leaves the working tree unchanged.
 pub fn reset_mixed(repo_path: &str, rev: &str) -> Result<(), Error> {
     let repo = open_git2(repo_path)?;
-    let obj = repo
-        .revparse_single(rev)
-        .map_err(|_| Error::RevNotFound {
-            rev: rev.to_owned(),
-        })?;
+    let obj = repo.revparse_single(rev).map_err(|_| Error::RevNotFound {
+        rev: rev.to_owned(),
+    })?;
     repo.reset(&obj, git2::ResetType::Mixed, None)
         .map_err(Error::internal)?;
     Ok(())
@@ -187,7 +181,7 @@ pub fn stash_list(repo_path: &str) -> Result<Vec<crate::types::StashEntry>, Erro
     let mut entries = Vec::new();
     repo.stash_foreach(|index, message, oid| {
         entries.push(crate::types::StashEntry {
-            index: index as u32,
+            index: u32::try_from(index).unwrap_or(u32::MAX),
             message: message.to_owned(),
             commit_hash: oid.to_string(),
         });
@@ -208,8 +202,7 @@ pub fn stash_apply(repo_path: &str, index: u32) -> Result<(), Error> {
 /// Drop a stash entry (equivalent to `git stash drop stash@{index}`).
 pub fn stash_drop(repo_path: &str, index: u32) -> Result<(), Error> {
     let mut repo = open_git2(repo_path)?;
-    repo.stash_drop(index as usize)
-        .map_err(Error::internal)?;
+    repo.stash_drop(index as usize).map_err(Error::internal)?;
     Ok(())
 }
 
@@ -220,7 +213,7 @@ pub fn stash_show(repo_path: &str, index: u32) -> Result<String, Error> {
     // Find the stash OID at the given index
     let mut stash_oid: Option<git2::Oid> = None;
     repo.stash_foreach(|i, _message, oid| {
-        if i as u32 == index {
+        if u32::try_from(i).unwrap_or(u32::MAX) == index {
             stash_oid = Some(*oid);
             false // stop iterating
         } else {
@@ -302,20 +295,17 @@ pub fn add_files(repo_path: &str, paths: &[String]) -> Result<(), Error> {
 /// Unstage all staged changes (equivalent to `git reset`).
 pub fn reset_staging(repo_path: &str) -> Result<(), Error> {
     let repo = open_git2(repo_path)?;
-    match repo.head() {
-        Ok(head) => {
-            let obj = head
-                .peel(git2::ObjectType::Commit)
-                .map_err(Error::internal)?;
-            repo.reset(&obj, git2::ResetType::Mixed, None)
-                .map_err(Error::internal)?;
-        }
-        Err(_) => {
-            // Unborn branch (no commits yet) — clear the index entirely.
-            let mut index = repo.index().map_err(Error::internal)?;
-            index.clear().map_err(Error::internal)?;
-            index.write().map_err(Error::internal)?;
-        }
+    if let Ok(head) = repo.head() {
+        let obj = head
+            .peel(git2::ObjectType::Commit)
+            .map_err(Error::internal)?;
+        repo.reset(&obj, git2::ResetType::Mixed, None)
+            .map_err(Error::internal)?;
+    } else {
+        // Unborn branch (no commits yet) — clear the index entirely.
+        let mut index = repo.index().map_err(Error::internal)?;
+        index.clear().map_err(Error::internal)?;
+        index.write().map_err(Error::internal)?;
     }
     Ok(())
 }
@@ -333,27 +323,21 @@ pub fn restore_file(repo_path: &str, file_path: &str) -> Result<(), Error> {
     let has_head = repo.head().is_ok();
     if has_head {
         let head = repo.head().map_err(Error::internal)?;
-        let tree = head
-            .peel_to_tree()
-            .map_err(Error::internal)?;
+        let tree = head.peel_to_tree().map_err(Error::internal)?;
 
-        match tree.get_path(path) {
-            Ok(_) => {
-                // File exists in HEAD — checkout from HEAD
-                let mut cb = git2::build::CheckoutBuilder::new();
-                cb.force();
-                cb.path(file_path);
-                repo.checkout_head(Some(&mut cb))
-                    .map_err(Error::internal)?;
-            }
-            Err(_) => {
-                // File is untracked (not in HEAD) — remove from disk
-                let full_path = std::path::Path::new(repo_path).join(file_path);
-                if full_path.exists() {
-                    std::fs::remove_file(&full_path).map_err(|e| Error::Internal {
-                        message: format!("failed to remove untracked file: {}", e),
-                    })?;
-                }
+        if tree.get_path(path).is_ok() {
+            // File exists in HEAD — checkout from HEAD
+            let mut cb = git2::build::CheckoutBuilder::new();
+            cb.force();
+            cb.path(file_path);
+            repo.checkout_head(Some(&mut cb)).map_err(Error::internal)?;
+        } else {
+            // File is untracked (not in HEAD) — remove from disk
+            let full_path = std::path::Path::new(repo_path).join(file_path);
+            if full_path.exists() {
+                std::fs::remove_file(&full_path).map_err(|e| Error::Internal {
+                    message: format!("failed to remove untracked file: {e}"),
+                })?;
             }
         }
     } else {
@@ -361,7 +345,7 @@ pub fn restore_file(repo_path: &str, file_path: &str) -> Result<(), Error> {
         let full_path = std::path::Path::new(repo_path).join(file_path);
         if full_path.exists() {
             std::fs::remove_file(&full_path).map_err(|e| Error::Internal {
-                message: format!("failed to remove file: {}", e),
+                message: format!("failed to remove file: {e}"),
             })?;
         }
     }
@@ -370,7 +354,9 @@ pub fn restore_file(repo_path: &str, file_path: &str) -> Result<(), Error> {
     let mut index = repo.index().map_err(Error::internal)?;
     if has_head {
         let head = repo.head().map_err(Error::internal)?;
-        let obj = head.peel(git2::ObjectType::Commit).map_err(Error::internal)?;
+        let obj = head
+            .peel(git2::ObjectType::Commit)
+            .map_err(Error::internal)?;
         repo.reset_default(Some(&obj), [file_path])
             .map_err(Error::internal)?;
     } else {
@@ -394,9 +380,9 @@ pub fn amend_commit(repo_path: &str, message: &str) -> Result<(), Error> {
     head_commit
         .amend(
             Some("HEAD"),
-            None,          // keep original author
-            Some(&sig),    // update committer
-            None,          // keep encoding
+            None,       // keep original author
+            Some(&sig), // update committer
+            None,       // keep encoding
             Some(message),
             Some(&tree),
         )

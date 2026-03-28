@@ -58,8 +58,7 @@ fn scan_finds_node_modules_with_matching_lockfile() {
     // scan_clone_candidates delegates to scan_worktreeinclude; provide .gitignore
     fs::write(repo.path().join(".gitignore"), "node_modules/\n").unwrap();
 
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
     assert!(!candidates.is_empty(), "should find node_modules candidate");
     let nm = candidates
@@ -86,15 +85,17 @@ fn scan_detects_lockfile_mismatch() {
     // scan_clone_candidates delegates to scan_worktreeinclude; provide .gitignore
     fs::write(repo.path().join(".gitignore"), "node_modules/\n").unwrap();
 
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
     let nm = candidates
         .iter()
         .find(|c| c.dest_path.contains("node_modules"))
         .expect("should have node_modules candidate");
     // New code always sets lockfile_matches = true (no lockfile comparison in new system)
-    assert!(nm.lockfile_matches, "new system always reports lockfile_matches = true");
+    assert!(
+        nm.lockfile_matches,
+        "new system always reports lockfile_matches = true"
+    );
     // New code always uses CowClone (no lockfile-based Skip)
     assert_eq!(
         format!("{:?}", nm.strategy),
@@ -113,8 +114,7 @@ fn scan_detects_pnpm_lockfile() {
     // scan_clone_candidates delegates to scan_worktreeinclude; provide .gitignore
     fs::write(repo.path().join(".gitignore"), "node_modules/\n").unwrap();
 
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
     let nm = candidates
         .iter()
@@ -143,8 +143,7 @@ fn scan_finds_rust_target() {
     // scan_clone_candidates delegates to scan_worktreeinclude; provide .gitignore
     fs::write(repo.path().join(".gitignore"), "target/\n").unwrap();
 
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
     let target = candidates
         .iter()
@@ -169,12 +168,9 @@ fn scan_respects_worktreeinclude() {
     // Write .worktreeinclude in repo
     fs::write(repo.path().join(".worktreeinclude"), "my-cache\n").unwrap();
 
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
-    let custom_candidate = candidates
-        .iter()
-        .find(|c| c.dest_path.contains("my-cache"));
+    let custom_candidate = candidates.iter().find(|c| c.dest_path.contains("my-cache"));
     assert!(
         custom_candidate.is_some(),
         ".worktreeinclude dirs should be scanned"
@@ -194,8 +190,7 @@ fn cow_clone_produces_identical_contents() {
     let dest = TempDir::new().unwrap();
     let dest_path = dest.path().join("cloned");
 
-    let result =
-        cow_clone_directory(path_str(src.path()), path_str(&dest_path)).unwrap();
+    let result = cow_clone_directory(path_str(src.path()), path_str(&dest_path)).unwrap();
 
     assert!(result.cloned_count >= 3, "should clone at least 3 files");
     assert_eq!(
@@ -233,18 +228,13 @@ fn scan_skips_when_dest_already_exists() {
     // Pre-create node_modules in worktree
     fs::create_dir_all(wt.path().join("node_modules")).unwrap();
 
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
     let nm = candidates
         .iter()
         .find(|c| c.dest_path.contains("node_modules"));
     if let Some(c) = nm {
-        assert_eq!(
-            format!("{:?}", c.strategy),
-            "Skip",
-            "existing dest → Skip"
-        );
+        assert_eq!(format!("{:?}", c.strategy), "Skip", "existing dest → Skip");
     }
     // It's also valid for the scanner to omit it entirely
 }
@@ -254,8 +244,7 @@ fn scan_empty_repo_returns_no_candidates() {
     let repo = TempDir::new().unwrap();
     let wt = TempDir::new().unwrap();
 
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
     assert!(
         candidates.is_empty(),
@@ -281,8 +270,7 @@ fn scan_multiple_artifact_types() {
     )
     .unwrap();
 
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
     let dirs: Vec<&str> = candidates
         .iter()
@@ -312,18 +300,15 @@ fn full_scan_and_clone_cycle() {
     fs::write(repo.path().join(".gitignore"), "node_modules/\n").unwrap();
 
     // Scan
-    let candidates =
-        scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
+    let candidates = scan_clone_candidates(path_str(repo.path()), path_str(wt.path())).unwrap();
 
     // Clone each CowClone candidate
     let mut cloned = 0;
     for candidate in &candidates {
         if format!("{:?}", candidate.strategy) == "CowClone" {
-            let result = cow_clone_directory(
-                candidate.source_path.clone(),
-                candidate.dest_path.clone(),
-            )
-            .unwrap();
+            let result =
+                cow_clone_directory(candidate.source_path.clone(), candidate.dest_path.clone())
+                    .unwrap();
             assert!(result.cloned_count > 0);
             cloned += 1;
         }

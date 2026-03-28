@@ -1,3 +1,5 @@
+use std::fmt::Write as FmtWrite;
+
 use gix::bstr::ByteSlice;
 
 use crate::error::Error;
@@ -33,14 +35,14 @@ enum FileChange {
     },
 }
 
-/// Convert gix tree EntryMode to u32 for diff headers.
+/// Convert gix tree `EntryMode` to u32 for diff headers.
 fn mode_to_u32(mode: gix::object::tree::EntryMode) -> u32 {
     match mode.kind() {
-        gix::object::tree::EntryKind::Blob => 0o100644,
-        gix::object::tree::EntryKind::BlobExecutable => 0o100755,
-        gix::object::tree::EntryKind::Link => 0o120000,
-        gix::object::tree::EntryKind::Tree => 0o040000,
-        gix::object::tree::EntryKind::Commit => 0o160000,
+        gix::object::tree::EntryKind::Blob => 0o100_644,
+        gix::object::tree::EntryKind::BlobExecutable => 0o100_755,
+        gix::object::tree::EntryKind::Link => 0o120_000,
+        gix::object::tree::EntryKind::Tree => 0o040_000,
+        gix::object::tree::EntryKind::Commit => 0o160_000,
     }
 }
 
@@ -63,20 +65,18 @@ fn format_rename_diff(
     new_mode: u32,
 ) -> String {
     let mut out = String::new();
-    out.push_str(&format!("diff --git a/{old_path} b/{new_path}\n"));
-    out.push_str(&format!("similarity index {similarity}%\n"));
-    out.push_str(&format!("rename from {old_path}\n"));
-    out.push_str(&format!("rename to {new_path}\n"));
+    let _ = writeln!(out, "diff --git a/{old_path} b/{new_path}");
+    let _ = writeln!(out, "similarity index {similarity}%");
+    let _ = writeln!(out, "rename from {old_path}");
+    let _ = writeln!(out, "rename to {new_path}");
 
     if old_mode != new_mode {
-        out.push_str(&format!("old mode {:o}\n", old_mode));
-        out.push_str(&format!("new mode {:o}\n", new_mode));
+        let _ = writeln!(out, "old mode {old_mode:o}");
+        let _ = writeln!(out, "new mode {new_mode:o}");
     }
 
     if is_binary(old) || is_binary(new) {
-        out.push_str(&format!(
-            "Binary files a/{old_path} and b/{new_path} differ\n"
-        ));
+        let _ = writeln!(out, "Binary files a/{old_path} and b/{new_path} differ");
         return out;
     }
 
@@ -90,8 +90,8 @@ fn format_rename_diff(
     );
 
     if !hunks.is_empty() {
-        out.push_str(&format!("--- a/{old_path}\n"));
-        out.push_str(&format!("+++ b/{new_path}\n"));
+        let _ = writeln!(out, "--- a/{old_path}");
+        let _ = writeln!(out, "+++ b/{new_path}");
         out.push_str(&hunks);
     }
 
@@ -108,19 +108,19 @@ fn format_blob_diff(
     let mut out = String::new();
 
     // File-level header
-    out.push_str(&format!("diff --git a/{path} b/{path}\n"));
+    let _ = writeln!(out, "diff --git a/{path} b/{path}");
 
     // Mode lines
     match (old_mode, new_mode) {
         (None, Some(m)) => {
-            out.push_str(&format!("new file mode {:o}\n", m));
+            let _ = writeln!(out, "new file mode {m:o}");
         }
         (Some(m), None) => {
-            out.push_str(&format!("deleted file mode {:o}\n", m));
+            let _ = writeln!(out, "deleted file mode {m:o}");
         }
         (Some(om), Some(nm)) if om != nm => {
-            out.push_str(&format!("old mode {:o}\n", om));
-            out.push_str(&format!("new mode {:o}\n", nm));
+            let _ = writeln!(out, "old mode {om:o}");
+            let _ = writeln!(out, "new mode {nm:o}");
         }
         _ => {}
     }
@@ -130,7 +130,7 @@ fn format_blob_diff(
 
     // Binary check
     if is_binary(old_bytes) || is_binary(new_bytes) {
-        out.push_str(&format!("Binary files a/{path} and b/{path} differ\n"));
+        let _ = writeln!(out, "Binary files a/{path} and b/{path} differ");
         return out;
     }
 
@@ -138,12 +138,12 @@ fn format_blob_diff(
     if old.is_none() {
         out.push_str("--- /dev/null\n");
     } else {
-        out.push_str(&format!("--- a/{path}\n"));
+        let _ = writeln!(out, "--- a/{path}");
     }
     if new.is_none() {
-        out.push_str(&format!("+++ /dev/null\n"));
+        out.push_str("+++ /dev/null\n");
     } else {
-        out.push_str(&format!("+++ b/{path}\n"));
+        let _ = writeln!(out, "+++ b/{path}");
     }
 
     // Use imara_diff to produce unified hunks
@@ -159,17 +159,16 @@ fn format_blob_diff(
 
     if hunks.is_empty() {
         // No content difference — mode-only change
-        return if old_mode != new_mode {
-            let mut mode_only = String::new();
-            mode_only.push_str(&format!("diff --git a/{path} b/{path}\n"));
-            if let (Some(om), Some(nm)) = (old_mode, new_mode) {
-                mode_only.push_str(&format!("old mode {:o}\n", om));
-                mode_only.push_str(&format!("new mode {:o}\n", nm));
+        if let (Some(om), Some(nm)) = (old_mode, new_mode) {
+            if om != nm {
+                let mut mode_only = String::new();
+                let _ = writeln!(mode_only, "diff --git a/{path} b/{path}");
+                let _ = writeln!(mode_only, "old mode {om:o}");
+                let _ = writeln!(mode_only, "new mode {nm:o}");
+                return mode_only;
             }
-            mode_only
-        } else {
-            String::new()
-        };
+        }
+        return String::new();
     }
 
     out.push_str(&hunks);
@@ -198,10 +197,8 @@ fn diff_trees(
                     // Skip tree (directory) entries — only diff blobs
                     let is_tree = match &change {
                         gix::object::tree::diff::Change::Addition { entry_mode, .. }
-                        | gix::object::tree::diff::Change::Deletion { entry_mode, .. } => {
-                            entry_mode.is_tree()
-                        }
-                        gix::object::tree::diff::Change::Modification { entry_mode, .. }
+                        | gix::object::tree::diff::Change::Deletion { entry_mode, .. }
+                        | gix::object::tree::diff::Change::Modification { entry_mode, .. }
                         | gix::object::tree::diff::Change::Rewrite { entry_mode, .. } => {
                             entry_mode.is_tree()
                         }
@@ -261,64 +258,64 @@ fn diff_trees(
     }
 
     // Run rename detection on deletions + additions
-    detect_renames(repo, &mut diffs)?;
+    detect_renames(repo, &mut diffs);
 
+    format_file_changes(repo, &diffs)
+}
+
+fn format_file_changes(
+    repo: &gix::Repository,
+    diffs: &[(String, FileChange)],
+) -> Result<String, Error> {
     let mut result = String::new();
-
-    for (path, change) in &diffs {
-        let diff_text = match change {
-            FileChange::Addition { id, mode } => {
-                let blob = repo.find_object(*id).map_err(Error::internal)?;
-                format_blob_diff(path, None, Some(&blob.data), None, Some(*mode))
-            }
-            FileChange::Deletion { id, mode } => {
-                let blob = repo.find_object(*id).map_err(Error::internal)?;
-                format_blob_diff(path, Some(&blob.data), None, Some(*mode), None)
-            }
-            FileChange::Modification {
-                old_id,
-                new_id,
-                old_mode,
-                new_mode,
-            } => {
-                let old_blob = repo.find_object(*old_id).map_err(Error::internal)?;
-                let new_blob = repo.find_object(*new_id).map_err(Error::internal)?;
-                format_blob_diff(
-                    path,
-                    Some(&old_blob.data),
-                    Some(&new_blob.data),
-                    Some(*old_mode),
-                    Some(*new_mode),
-                )
-            }
-            FileChange::Rename {
-                old_path,
-                old_id,
-                new_id,
-                old_mode,
-                new_mode,
-                similarity,
-            } => {
-                let old_blob = repo.find_object(*old_id).map_err(Error::internal)?;
-                let new_blob = repo.find_object(*new_id).map_err(Error::internal)?;
-                format_rename_diff(
-                    old_path,
-                    path,
-                    &old_blob.data,
-                    &new_blob.data,
-                    *similarity,
-                    *old_mode,
-                    *new_mode,
-                )
-            }
-        };
-
+    for (path, change) in diffs {
+        let diff_text = format_single_change(repo, path, change)?;
         if !diff_text.is_empty() {
             result.push_str(&diff_text);
         }
     }
-
     Ok(result)
+}
+
+fn format_single_change(
+    repo: &gix::Repository,
+    path: &str,
+    change: &FileChange,
+) -> Result<String, Error> {
+    match change {
+        FileChange::Addition { id, mode } => {
+            let blob = repo.find_object(*id).map_err(Error::internal)?;
+            Ok(format_blob_diff(path, None, Some(&blob.data), None, Some(*mode)))
+        }
+        FileChange::Deletion { id, mode } => {
+            let blob = repo.find_object(*id).map_err(Error::internal)?;
+            Ok(format_blob_diff(path, Some(&blob.data), None, Some(*mode), None))
+        }
+        FileChange::Modification { old_id, new_id, old_mode, new_mode } => {
+            let old_blob = repo.find_object(*old_id).map_err(Error::internal)?;
+            let new_blob = repo.find_object(*new_id).map_err(Error::internal)?;
+            Ok(format_blob_diff(
+                path,
+                Some(&old_blob.data),
+                Some(&new_blob.data),
+                Some(*old_mode),
+                Some(*new_mode),
+            ))
+        }
+        FileChange::Rename { old_path, old_id, new_id, old_mode, new_mode, similarity } => {
+            let old_blob = repo.find_object(*old_id).map_err(Error::internal)?;
+            let new_blob = repo.find_object(*new_id).map_err(Error::internal)?;
+            Ok(format_rename_diff(
+                old_path,
+                path,
+                &old_blob.data,
+                &new_blob.data,
+                *similarity,
+                *old_mode,
+                *new_mode,
+            ))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -334,7 +331,7 @@ const RENAME_THRESHOLD: u32 = 50;
 fn detect_renames(
     repo: &gix::Repository,
     diffs: &mut Vec<(String, FileChange)>,
-) -> Result<(), Error> {
+) {
     // Collect indices of deletions and additions
     let deletions: Vec<usize> = diffs
         .iter()
@@ -348,7 +345,7 @@ fn detect_renames(
         .collect();
 
     if deletions.is_empty() || additions.is_empty() {
-        return Ok(());
+        return;
     }
 
     // Phase 1: exact OID matches (100% similarity, O(n) with a hash set)
@@ -400,7 +397,7 @@ fn detect_renames(
             .iter()
             .filter_map(|(i, _)| {
                 if let FileChange::Deletion { id, .. } = &diffs[*i].1 {
-                    repo.find_object(*id).ok().map(|o| (*i, o.data.to_vec()))
+                    repo.find_object(*id).ok().map(|o| (*i, o.data.clone()))
                 } else {
                     None
                 }
@@ -410,7 +407,7 @@ fn detect_renames(
             .iter()
             .filter_map(|(i, _)| {
                 if let FileChange::Addition { id, .. } = &diffs[*i].1 {
-                    repo.find_object(*id).ok().map(|o| (*i, o.data.to_vec()))
+                    repo.find_object(*id).ok().map(|o| (*i, o.data.clone()))
                 } else {
                     None
                 }
@@ -426,10 +423,8 @@ fn detect_renames(
                     continue;
                 }
                 let sim = content_similarity(del_bytes, add_bytes);
-                if sim >= RENAME_THRESHOLD {
-                    if best.is_none() || sim > best.unwrap().1 {
-                        best = Some((*add_i, sim));
-                    }
+                if sim >= RENAME_THRESHOLD && (best.is_none() || sim > best.unwrap().1) {
+                    best = Some((*add_i, sim));
                 }
             }
             if let Some((add_i, sim)) = best {
@@ -439,7 +434,10 @@ fn detect_renames(
         }
     }
 
-    // Apply renames: replace the addition entry with Rename, mark deletion for removal
+    apply_renames(diffs, renames);
+}
+
+fn apply_renames(diffs: &mut Vec<(String, FileChange)>, renames: Vec<(usize, usize, u32)>) {
     let mut to_remove: std::collections::HashSet<usize> = std::collections::HashSet::new();
     for (del_i, add_i, similarity) in renames {
         let old_path = diffs[del_i].0.clone();
@@ -462,14 +460,11 @@ fn detect_renames(
         to_remove.insert(del_i);
     }
 
-    // Remove consumed deletions (iterate in reverse to preserve indices)
     let mut remove_sorted: Vec<usize> = to_remove.into_iter().collect();
     remove_sorted.sort_unstable_by(|a, b| b.cmp(a));
     for i in remove_sorted {
         diffs.remove(i);
     }
-
-    Ok(())
 }
 
 /// Compute line-level similarity between two byte slices (0–100).
@@ -497,7 +492,7 @@ fn content_similarity(old: &[u8], new: &[u8]) -> u32 {
             }
         }
     }
-    ((matched * 100) / total) as u32
+    u32::try_from((matched * 100) / total).unwrap_or(100)
 }
 
 /// Recursively collect all blob entries from a tree as additions.
@@ -638,9 +633,6 @@ impl WtEntry {
 
 /// Working tree diff (equivalent to `git diff HEAD` + untracked file diffs).
 pub fn working_tree_diff(repo_path: &str) -> Result<String, Error> {
-    use gix::dir::entry::Status as DirStatus;
-    use gix::status::index_worktree;
-    use gix::status::Item;
     use gix::status::UntrackedFiles;
 
     let ts = repo::open(repo_path)?;
@@ -661,120 +653,118 @@ pub fn working_tree_diff(repo_path: &str) -> Result<String, Error> {
         .into_iter(Vec::new())
         .map_err(Error::internal)?;
 
-    // Phase 1: collect all entries with their data
     let mut entries: Vec<WtEntry> = Vec::new();
-
     for item in iter {
         let item = item.map_err(Error::internal)?;
-
-        match item {
-            Item::TreeIndex(change) => {
-                let (path_bstr, _idx, _mode, id) = change.fields();
-                let path = path_bstr.to_str_lossy().to_string();
-                let new_blob = repo.find_object(id).map_err(Error::internal)?;
-                let (old_data, old_mode) = head_blob_for_path(&repo, head_tree.as_ref(), &path);
-                entries.push(WtEntry {
-                    path,
-                    old_path: None,
-                    old_data,
-                    new_data: Some(new_blob.data.to_vec()),
-                    old_mode,
-                    new_mode: Some(0o100644),
-                    similarity: None,
-                });
-            }
-            Item::IndexWorktree(ref iw_item) => match iw_item {
-                index_worktree::Item::Modification {
-                    rela_path, status, ..
-                } => {
-                    use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
-                    let path = rela_path.to_str_lossy().to_string();
-                    match status {
-                        EntryStatus::Change(Change::Removed) => {
-                            let (old_data, old_mode) =
-                                head_blob_for_path(&repo, head_tree.as_ref(), &path);
-                            entries.push(WtEntry {
-                                path,
-                                old_path: None,
-                                old_data,
-                                new_data: None,
-                                old_mode,
-                                new_mode: None,
-                                similarity: None,
-                            });
-                        }
-                        EntryStatus::Change(Change::Modification { .. })
-                        | EntryStatus::Change(Change::SubmoduleModification(_))
-                        | EntryStatus::Change(Change::Type { .. }) => {
-                            let (old_data, old_mode) =
-                                head_blob_for_path(&repo, head_tree.as_ref(), &path);
-                            let disk_path = work_dir.join(&path);
-                            let new_data = std::fs::read(&disk_path).ok();
-                            entries.push(WtEntry {
-                                path,
-                                old_path: None,
-                                old_data,
-                                new_data,
-                                old_mode,
-                                new_mode: Some(0o100644),
-                                similarity: None,
-                            });
-                        }
-                        _ => {}
-                    }
-                }
-                index_worktree::Item::DirectoryContents { entry, .. } => {
-                    if matches!(entry.status, DirStatus::Untracked) {
-                        let path = entry.rela_path.to_str_lossy().to_string();
-                        let disk_path = work_dir.join(&path);
-                        let new_data = std::fs::read(&disk_path).ok();
-                        entries.push(WtEntry {
-                            path,
-                            old_path: None,
-                            old_data: None,
-                            new_data,
-                            old_mode: None,
-                            new_mode: Some(0o100644),
-                            similarity: None,
-                        });
-                    }
-                }
-                _ => {}
-            },
-        }
+        collect_wt_entry(item, &repo, head_tree.as_ref(), &work_dir, &mut entries)?;
     }
 
-    // Phase 2: rename detection on deletions ↔ additions
     detect_wt_renames(&mut entries);
+    Ok(format_wt_entries(&entries))
+}
 
-    // Phase 3: format output
+fn collect_wt_entry(
+    item: gix::status::Item,
+    repo: &gix::Repository,
+    head_tree: Option<&gix::Tree<'_>>,
+    work_dir: &std::path::Path,
+    entries: &mut Vec<WtEntry>,
+) -> Result<(), Error> {
+    use gix::bstr::ByteSlice;
+    use gix::status::Item;
+
+    match item {
+        Item::TreeIndex(change) => {
+            let (path_bstr, _idx, _mode, id) = change.fields();
+            let path = path_bstr.to_str_lossy().to_string();
+            let new_blob = repo.find_object(id).map_err(Error::internal)?;
+            let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
+            entries.push(WtEntry {
+                path, old_path: None, old_data,
+                new_data: Some(new_blob.data.clone()),
+                old_mode, new_mode: Some(0o100_644), similarity: None,
+            });
+        }
+        Item::IndexWorktree(ref iw_item) => {
+            collect_wt_iw_entry(iw_item, repo, head_tree, work_dir, entries);
+        }
+    }
+    Ok(())
+}
+
+fn collect_wt_iw_entry(
+    iw_item: &gix::status::index_worktree::Item,
+    repo: &gix::Repository,
+    head_tree: Option<&gix::Tree<'_>>,
+    work_dir: &std::path::Path,
+    entries: &mut Vec<WtEntry>,
+) {
+    use gix::bstr::ByteSlice;
+    use gix::dir::entry::Status as DirStatus;
+    use gix::status::index_worktree;
+    use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
+
+    match iw_item {
+        index_worktree::Item::Modification { rela_path, status, .. } => {
+            let path = rela_path.to_str_lossy().to_string();
+            match status {
+                EntryStatus::Change(Change::Removed) => {
+                    let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
+                    entries.push(WtEntry {
+                        path, old_path: None, old_data, new_data: None,
+                        old_mode, new_mode: None, similarity: None,
+                    });
+                }
+                EntryStatus::Change(
+                    Change::Modification { .. } | Change::SubmoduleModification(_) | Change::Type { .. },
+                ) => {
+                    let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
+                    let new_data = std::fs::read(work_dir.join(&path)).ok();
+                    entries.push(WtEntry {
+                        path, old_path: None, old_data, new_data,
+                        old_mode, new_mode: Some(0o100_644), similarity: None,
+                    });
+                }
+                _ => {}
+            }
+        }
+        index_worktree::Item::DirectoryContents { entry, .. } => {
+            if matches!(entry.status, DirStatus::Untracked) {
+                let path = entry.rela_path.to_str_lossy().to_string();
+                let new_data = std::fs::read(work_dir.join(&path)).ok();
+                entries.push(WtEntry {
+                    path, old_path: None, old_data: None, new_data,
+                    old_mode: None, new_mode: Some(0o100_644), similarity: None,
+                });
+            }
+        }
+        index_worktree::Item::Rewrite { .. } => {}
+    }
+}
+
+fn format_wt_entries(entries: &[WtEntry]) -> String {
     let mut result = String::new();
-    for entry in &entries {
+    for entry in entries {
         let diff_text = if let (Some(old_path), Some(sim)) = (&entry.old_path, entry.similarity) {
             format_rename_diff(
-                old_path,
-                &entry.path,
+                old_path, &entry.path,
                 entry.old_data.as_deref().unwrap_or(b""),
                 entry.new_data.as_deref().unwrap_or(b""),
                 sim,
-                entry.old_mode.unwrap_or(0o100644),
-                entry.new_mode.unwrap_or(0o100644),
+                entry.old_mode.unwrap_or(0o100_644),
+                entry.new_mode.unwrap_or(0o100_644),
             )
         } else {
             format_blob_diff(
-                &entry.path,
-                entry.old_data.as_deref(),
-                entry.new_data.as_deref(),
-                entry.old_mode,
-                entry.new_mode,
+                &entry.path, entry.old_data.as_deref(), entry.new_data.as_deref(),
+                entry.old_mode, entry.new_mode,
             )
         };
         if !diff_text.is_empty() {
             result.push_str(&diff_text);
         }
     }
-
-    Ok(result)
+    result
 }
 
 /// Rename detection for working-tree entries using raw byte data.
@@ -798,24 +788,20 @@ fn detect_wt_renames(entries: &mut Vec<WtEntry>) {
     let mut renames: Vec<(usize, usize, u32)> = Vec::new();
 
     for &del_i in &deletions {
-        let del_data = match &entries[del_i].old_data {
-            Some(d) => d,
-            None => continue,
+        let Some(del_data) = &entries[del_i].old_data else {
+            continue;
         };
         let mut best: Option<(usize, u32)> = None;
         for &add_i in &additions {
             if used_adds.contains(&add_i) {
                 continue;
             }
-            let add_data = match &entries[add_i].new_data {
-                Some(d) => d,
-                None => continue,
+            let Some(add_data) = &entries[add_i].new_data else {
+                continue;
             };
             let sim = content_similarity(del_data, add_data);
-            if sim >= RENAME_THRESHOLD {
-                if best.is_none() || sim > best.unwrap().1 {
-                    best = Some((add_i, sim));
-                }
+            if sim >= RENAME_THRESHOLD && (best.is_none() || sim > best.unwrap().1) {
+                best = Some((add_i, sim));
             }
         }
         if let Some((add_i, sim)) = best {
@@ -843,10 +829,6 @@ fn detect_wt_renames(entries: &mut Vec<WtEntry>) {
 
 /// Working tree diff for LLM context — sectioned into staged, unstaged, untracked.
 pub fn working_tree_diff_for_context(repo_path: &str) -> Result<String, Error> {
-    use gix::diff::index::ChangeRef as TIChange;
-    use gix::dir::entry::Status as DirStatus;
-    use gix::status::index_worktree;
-    use gix::status::Item;
     use gix::status::UntrackedFiles;
 
     let ts = repo::open(repo_path)?;
@@ -873,100 +855,96 @@ pub fn working_tree_diff_for_context(repo_path: &str) -> Result<String, Error> {
 
     for item in iter {
         let item = item.map_err(Error::internal)?;
-
-        match item {
-            Item::TreeIndex(change) => {
-                let (path_bstr, _idx, _mode, id) = change.fields();
-                let path = path_bstr.to_str_lossy().to_string();
-                let (old_data, old_mode) = head_blob_for_path(&repo, head_tree.as_ref(), &path);
-
-                let is_deletion = matches!(&change, TIChange::Deletion { .. });
-
-                if is_deletion {
-                    let diff_text =
-                        format_blob_diff(&path, old_data.as_deref(), None, old_mode, None);
-                    if !diff_text.is_empty() {
-                        staged.push_str(&diff_text);
-                    }
-                } else {
-                    let new_blob = repo.find_object(id).map_err(Error::internal)?;
-                    let diff_text = format_blob_diff(
-                        &path,
-                        old_data.as_deref(),
-                        Some(&new_blob.data),
-                        old_mode,
-                        Some(0o100644),
-                    );
-                    if !diff_text.is_empty() {
-                        staged.push_str(&diff_text);
-                    }
-                }
-            }
-            Item::IndexWorktree(ref iw_item) => match iw_item {
-                index_worktree::Item::Modification {
-                    rela_path, status, ..
-                } => {
-                    use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
-                    let path = rela_path.to_str_lossy().to_string();
-                    match status {
-                        EntryStatus::Change(Change::Removed) => {
-                            let (old_data, old_mode) =
-                                head_blob_for_path(&repo, head_tree.as_ref(), &path);
-                            let diff_text =
-                                format_blob_diff(&path, old_data.as_deref(), None, old_mode, None);
-                            if !diff_text.is_empty() {
-                                unstaged.push_str(&diff_text);
-                            }
-                        }
-                        EntryStatus::Change(Change::Modification { .. })
-                        | EntryStatus::Change(Change::SubmoduleModification(_))
-                        | EntryStatus::Change(Change::Type { .. }) => {
-                            let index_data = index_blob_for_path(&repo, &path);
-                            let disk_path = work_dir.join(&path);
-                            let new_data = std::fs::read(&disk_path).ok();
-                            let diff_text = format_blob_diff(
-                                &path,
-                                index_data.as_deref(),
-                                new_data.as_deref(),
-                                Some(0o100644),
-                                Some(0o100644),
-                            );
-                            if !diff_text.is_empty() {
-                                unstaged.push_str(&diff_text);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                index_worktree::Item::DirectoryContents { entry, .. } => {
-                    if matches!(entry.status, DirStatus::Untracked) {
-                        untracked_files.push(entry.rela_path.to_str_lossy().to_string());
-                    }
-                }
-                _ => {}
-            },
-        }
+        collect_context_item(
+            item, &repo, head_tree.as_ref(), &work_dir,
+            &mut staged, &mut unstaged, &mut untracked_files,
+        )?;
     }
 
-    let mut result = String::new();
+    Ok(format_context_sections(&staged, &unstaged, &untracked_files))
+}
 
+fn collect_context_item(
+    item: gix::status::Item,
+    repo: &gix::Repository,
+    head_tree: Option<&gix::Tree<'_>>,
+    work_dir: &std::path::Path,
+    staged: &mut String,
+    unstaged: &mut String,
+    untracked_files: &mut Vec<String>,
+) -> Result<(), Error> {
+    use gix::bstr::ByteSlice;
+    use gix::diff::index::ChangeRef as TIChange;
+    use gix::dir::entry::Status as DirStatus;
+    use gix::status::index_worktree;
+    use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
+    use gix::status::Item;
+
+    match item {
+        Item::TreeIndex(change) => {
+            let (path_bstr, _idx, _mode, id) = change.fields();
+            let path = path_bstr.to_str_lossy().to_string();
+            let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
+            let diff_text = if matches!(&change, TIChange::Deletion { .. }) {
+                format_blob_diff(&path, old_data.as_deref(), None, old_mode, None)
+            } else {
+                let new_blob = repo.find_object(id).map_err(Error::internal)?;
+                format_blob_diff(&path, old_data.as_deref(), Some(&new_blob.data), old_mode, Some(0o100_644))
+            };
+            if !diff_text.is_empty() { staged.push_str(&diff_text); }
+        }
+        Item::IndexWorktree(ref iw_item) => match iw_item {
+            index_worktree::Item::Modification { rela_path, status, .. } => {
+                let path = rela_path.to_str_lossy().to_string();
+                match status {
+                    EntryStatus::Change(Change::Removed) => {
+                        let (old_data, old_mode) = head_blob_for_path(repo, head_tree, &path);
+                        let diff_text = format_blob_diff(&path, old_data.as_deref(), None, old_mode, None);
+                        if !diff_text.is_empty() { unstaged.push_str(&diff_text); }
+                    }
+                    EntryStatus::Change(
+                        Change::Modification { .. } | Change::SubmoduleModification(_) | Change::Type { .. },
+                    ) => {
+                        let index_data = index_blob_for_path(repo, &path);
+                        let new_data = std::fs::read(work_dir.join(&path)).ok();
+                        let diff_text = format_blob_diff(
+                            &path, index_data.as_deref(), new_data.as_deref(),
+                            Some(0o100_644), Some(0o100_644),
+                        );
+                        if !diff_text.is_empty() { unstaged.push_str(&diff_text); }
+                    }
+                    _ => {}
+                }
+            }
+            index_worktree::Item::DirectoryContents { entry, .. } => {
+                if matches!(entry.status, DirStatus::Untracked) {
+                    untracked_files.push(entry.rela_path.to_str_lossy().to_string());
+                }
+            }
+            index_worktree::Item::Rewrite { .. } => {}
+        },
+    }
+    Ok(())
+}
+
+fn format_context_sections(staged: &str, unstaged: &str, untracked: &[String]) -> String {
+    let mut result = String::new();
     if !staged.is_empty() {
         result.push_str("=== Staged Changes ===\n");
-        result.push_str(&staged);
+        result.push_str(staged);
     }
     if !unstaged.is_empty() {
         result.push_str("=== Unstaged Changes ===\n");
-        result.push_str(&unstaged);
+        result.push_str(unstaged);
     }
-    if !untracked_files.is_empty() {
+    if !untracked.is_empty() {
         result.push_str("=== Untracked Files ===\n");
-        for f in &untracked_files {
+        for f in untracked {
             result.push_str(f);
             result.push('\n');
         }
     }
-
-    Ok(result)
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -979,15 +957,14 @@ fn head_blob_for_path(
     head_tree: Option<&gix::Tree<'_>>,
     path: &str,
 ) -> (Option<Vec<u8>>, Option<u32>) {
-    let tree = match head_tree {
-        Some(t) => t,
-        None => return (None, None),
+    let Some(tree) = head_tree else {
+        return (None, None);
     };
     match tree.lookup_entry_by_path(path) {
         Ok(Some(entry)) => {
             let mode = Some(mode_to_u32(entry.mode()));
             match repo.find_object(entry.object_id()) {
-                Ok(obj) => (Some(obj.data.to_vec()), mode),
+                Ok(obj) => (Some(obj.data.clone()), mode),
                 Err(_) => (None, mode),
             }
         }
@@ -999,9 +976,9 @@ fn head_blob_for_path(
 fn index_blob_for_path(repo: &gix::Repository, path: &str) -> Option<Vec<u8>> {
     let index = repo.index_or_empty().ok()?;
     let entry_idx = index
-        .entry_index_by_path(&gix::bstr::BStr::new(path.as_bytes()))
+        .entry_index_by_path(gix::bstr::BStr::new(path.as_bytes()))
         .ok()?;
     let entry = &index.entries()[entry_idx];
     let obj = repo.find_object(entry.id).ok()?;
-    Some(obj.data.to_vec())
+    Some(obj.data.clone())
 }

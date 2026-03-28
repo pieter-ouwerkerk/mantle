@@ -91,7 +91,12 @@ fn handle_pre_tool_use(event: &HookEvent) {
         return;
     }
 
-    if let Err(e) = mantle_git::worktree_add_new_branch(cwd.clone(), wt_str.clone(), branch.clone(), "HEAD".to_string()) {
+    if let Err(e) = mantle_git::worktree_add_new_branch(
+        cwd.clone(),
+        wt_str.clone(),
+        branch.clone(),
+        "HEAD".to_string(),
+    ) {
         eprintln!("error: failed to create worktree: {e}");
         return;
     }

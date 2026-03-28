@@ -51,7 +51,12 @@ pub fn log(repo_path: &str, max_count: u32, skip: u32) -> Result<Vec<CommitInfo>
     Ok(commits)
 }
 
-pub fn log_for_ref(repo_path: &str, git_ref: &str, max_count: u32, skip: u32) -> Result<Vec<CommitInfo>, Error> {
+pub fn log_for_ref(
+    repo_path: &str,
+    git_ref: &str,
+    max_count: u32,
+    skip: u32,
+) -> Result<Vec<CommitInfo>, Error> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
 
@@ -97,7 +102,11 @@ pub fn log_for_ref(repo_path: &str, git_ref: &str, max_count: u32, skip: u32) ->
     Ok(commits)
 }
 
-pub fn log_for_path(worktree_path: &str, max_count: u32, skip: u32) -> Result<Vec<CommitInfo>, Error> {
+pub fn log_for_path(
+    worktree_path: &str,
+    max_count: u32,
+    skip: u32,
+) -> Result<Vec<CommitInfo>, Error> {
     // logForPath in the shell version just runs git log in the worktree directory.
     // With gix, opening the worktree path discovers the correct repo.
     log(worktree_path, max_count, skip)
@@ -183,7 +192,7 @@ fn log_with_path_filter(
     let skip_count = skip as usize;
 
     let mut commits = Vec::new();
-    let mut matched = 0usize;
+    let mut skipped = 0usize;
 
     for info in walk {
         if commits.len() >= limit {
@@ -194,8 +203,8 @@ fn log_with_path_filter(
         let commit = commit_obj.try_into_commit().map_err(Error::internal)?;
 
         if commit_touches_paths(&repo, &commit, matches)? {
-            if matched < skip_count {
-                matched += 1;
+            if skipped < skip_count {
+                skipped += 1;
                 continue;
             }
             commits.push(commit_to_info(&commit)?);

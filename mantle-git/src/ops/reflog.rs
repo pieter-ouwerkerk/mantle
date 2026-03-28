@@ -17,7 +17,7 @@ pub fn reflog(repo_path: &str, refname: &str, max_count: u32) -> Result<Vec<Refl
             let offset_mins = time.offset_minutes();
 
             let date = if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
-                let offset = chrono::FixedOffset::east_opt(offset_mins as i32 * 60)
+                let offset = chrono::FixedOffset::east_opt(offset_mins * 60)
                     .unwrap_or_else(|| chrono::FixedOffset::east_opt(0).unwrap());
                 dt.with_timezone(&offset).to_rfc3339()
             } else {

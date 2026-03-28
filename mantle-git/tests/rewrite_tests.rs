@@ -311,13 +311,8 @@ fn test_rewrite_through_merge_commit() {
     let (repo, base, _merge) = create_repo_with_merge();
 
     // Rewrite the base commit message — chain passes through the merge
-    let result = git_rewrite_commit_message(
-        repo.path_str(),
-        base,
-        "Rewritten base".into(),
-        false,
-    )
-    .unwrap();
+    let result =
+        git_rewrite_commit_message(repo.path_str(), base, "Rewritten base".into(), false).unwrap();
 
     // base + Main work + Feature + Merge = 4 rewritten (all descendants of base)
     assert_eq!(result.rewritten_count, 4);
@@ -372,19 +367,17 @@ fn test_rewrite_preserves_merge_parents() {
 
     // Rewrite the base commit — all descendants (including Feature) are rewritten
     let base_hash = run_git(&repo.path, &["rev-parse", "HEAD~2"]);
-    git_rewrite_commit_message(
-        repo.path_str(),
-        base_hash,
-        "Rewritten base".into(),
-        false,
-    )
-    .unwrap();
+    git_rewrite_commit_message(repo.path_str(), base_hash, "Rewritten base".into(), false).unwrap();
 
     // The new merge commit should still have 2 parents
     let parent_count = run_git(&repo.path, &["rev-list", "--parents", "-1", "HEAD"]);
     let parts: Vec<&str> = parent_count.split_whitespace().collect();
     // Output is: <commit> <parent1> <parent2>
-    assert_eq!(parts.len(), 3, "merge should have 2 parents, got: {parent_count}");
+    assert_eq!(
+        parts.len(),
+        3,
+        "merge should have 2 parents, got: {parent_count}"
+    );
 
     // Second parent (Feature) should also be rewritten — its parent was Base
     // which was modified, so Feature gets a new OID. Verify its content is intact.
@@ -418,13 +411,7 @@ fn test_rewrite_shared_ancestor_no_duplicates() {
     // Delete feature branch ref so it doesn't keep old commits reachable
     run_git(&repo.path, &["branch", "-D", "feature"]);
 
-    git_rewrite_commit_message(
-        repo.path_str(),
-        base,
-        "Unique base message".into(),
-        false,
-    )
-    .unwrap();
+    git_rewrite_commit_message(repo.path_str(), base, "Unique base message".into(), false).unwrap();
 
     // Count commits reachable from HEAD (traversing both sides of merge)
     let all_commits = run_git(&repo.path, &["log", "--format=%H %s"]);
@@ -471,7 +458,10 @@ fn test_rewrite_commit_on_second_parent_side() {
 
     let commits = git_log(repo.path_str(), 200, 0).unwrap();
     let feature_commit = commits.iter().find(|c| c.message == "Rewritten feature");
-    assert!(feature_commit.is_some(), "feature commit should have new message");
+    assert!(
+        feature_commit.is_some(),
+        "feature commit should have new message"
+    );
 
     // All files should exist
     let files = git_list_tracked_files(repo.path_str()).unwrap();
@@ -486,9 +476,14 @@ fn test_rewrite_commit_on_second_parent_side() {
 
     // First parent of merge should be UNCHANGED (Main work wasn't touched)
     let first_parent_after = run_git(&repo.path, &["rev-parse", "HEAD^1"]);
-    let main_work_hash = run_git(&repo.path, &["log", "--format=%H", "--all", "--grep=Main work"]);
-    assert_eq!(first_parent_after, main_work_hash,
-        "first parent of merge should be unchanged Main work commit");
+    let main_work_hash = run_git(
+        &repo.path,
+        &["log", "--format=%H", "--all", "--grep=Main work"],
+    );
+    assert_eq!(
+        first_parent_after, main_work_hash,
+        "first parent of merge should be unchanged Main work commit"
+    );
 }
 
 #[test]
@@ -825,14 +820,21 @@ fn test_rewrite_commit_via_worktree_path() {
         "Rewritten via worktree".into(),
         false,
     );
-    assert!(result.is_ok(), "rewrite via worktree failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "rewrite via worktree failed: {:?}",
+        result.err()
+    );
 
     // Verify the commit was rewritten
     let commits = git_log(wt_path.to_str().unwrap().to_owned(), 200, 0).unwrap();
     assert_eq!(commits[0].message, "Rewritten via worktree");
 
     // Clean up worktree
-    run_git(&repo.path, &["worktree", "remove", wt_path.to_str().unwrap()]);
+    run_git(
+        &repo.path,
+        &["worktree", "remove", wt_path.to_str().unwrap()],
+    );
 }
 
 #[test]
@@ -861,13 +863,20 @@ fn test_rewrite_older_commit_via_worktree_path() {
         "Rewritten older commit".into(),
         false,
     );
-    assert!(result.is_ok(), "rewrite via worktree failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "rewrite via worktree failed: {:?}",
+        result.err()
+    );
 
     let commits = git_log(wt_path.to_str().unwrap().to_owned(), 200, 0).unwrap();
     assert_eq!(commits[1].message, "Rewritten older commit");
     assert_eq!(commits[0].message, "Second feature commit");
 
-    run_git(&repo.path, &["worktree", "remove", wt_path.to_str().unwrap()]);
+    run_git(
+        &repo.path,
+        &["worktree", "remove", wt_path.to_str().unwrap()],
+    );
 }
 
 // ---------------------------------------------------------------------------

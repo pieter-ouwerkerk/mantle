@@ -12,8 +12,8 @@ fn open_git2(repo_path: &str) -> Result<git2::Repository, Error> {
     git2::Repository::open(repo_path).map_err(Error::internal)
 }
 
-/// Detect the SSH agent socket from ~/.ssh/config (e.g. 1Password IdentityAgent)
-/// and set SSH_AUTH_SOCK so libssh2 (used by libgit2) can find it.
+/// Detect the SSH agent socket from `~/.ssh/config` (e.g. 1Password `IdentityAgent`)
+/// and set `SSH_AUTH_SOCK` so libssh2 (used by libgit2) can find it.
 /// This runs once per process.
 fn ensure_ssh_auth_sock() {
     static INIT: Once = Once::new();
@@ -21,21 +21,19 @@ fn ensure_ssh_auth_sock() {
         // Parse ~/.ssh/config for IdentityAgent directive.
         // This takes priority over SSH_AUTH_SOCK because the default macOS launchd
         // agent socket may exist but have no keys (e.g. when 1Password manages keys).
-        let home = match std::env::var("HOME") {
-            Ok(h) => h,
-            Err(_) => return,
+        let Ok(home) = std::env::var("HOME") else {
+            return;
         };
         let config_path = format!("{home}/.ssh/config");
-        let contents = match std::fs::read_to_string(&config_path) {
-            Ok(c) => c,
-            Err(_) => return,
+        let Ok(contents) = std::fs::read_to_string(&config_path) else {
+            return;
         };
 
         for line in contents.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("IdentityAgent") {
                 // Handle quoted or unquoted paths
-                let raw = trimmed.splitn(2, char::is_whitespace).nth(1).unwrap_or("");
+                let raw = trimmed.split_once(char::is_whitespace).map_or("", |(_, r)| r);
                 let path = raw.trim().trim_matches('"');
                 let expanded = path.replace("~/", &format!("{home}/"));
                 if std::path::Path::new(&expanded).exists() {
@@ -57,7 +55,7 @@ fn make_callbacks<'a>() -> git2::RemoteCallbacks<'a> {
     let tried_ssh = Cell::new(false);
     let tried_default = Cell::new(false);
 
-    callbacks.credentials(move |_url, username_from_url, allowed_types| {
+    callbacks.credentials(move |url, username_from_url, allowed_types| {
         // SSH key from agent (macOS ssh-agent or 1Password agent)
         if allowed_types.contains(git2::CredentialType::SSH_KEY) && !tried_ssh.get() {
             tried_ssh.set(true);
@@ -76,7 +74,7 @@ fn make_callbacks<'a>() -> git2::RemoteCallbacks<'a> {
                     // Fallback: create an empty in-memory config
                     git2::Config::new().expect("create empty git config")
                 }),
-                _url,
+                url,
                 username_from_url,
             );
         }
@@ -119,8 +117,8 @@ pub fn list_remotes(repo_path: &str) -> Result<Vec<RemoteInfo>, Error> {
         let remote = repo.find_remote(name).map_err(Error::internal)?;
         remotes.push(RemoteInfo {
             name: name.to_owned(),
-            fetch_url: remote.url().map(|s| s.to_owned()),
-            push_url: remote.pushurl().map(|s| s.to_owned()),
+            fetch_url: remote.url().map(str::to_owned),
+            push_url: remote.pushurl().map(str::to_owned),
         });
     }
 
@@ -231,7 +229,7 @@ pub fn push_branch(
     let remote_name = repo
         .branch_upstream_remote(&format!("refs/heads/{branch}"))
         .ok()
-        .and_then(|buf| buf.as_str().map(|s| s.to_owned()))
+        .and_then(|buf| buf.as_str().map(str::to_owned))
         .unwrap_or_else(|| "origin".to_owned());
 
     // Build refspec: refs/heads/<branch>:refs/heads/<branch>
@@ -270,16 +268,13 @@ pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResu
     let local_ref = repo
         .find_reference(&local_ref_name)
         .map_err(Error::internal)?;
-    let remote_ref = match repo.find_reference(&remote_ref_name) {
-        Ok(r) => r,
-        Err(_) => {
-            // Remote branch doesn't exist (yet) — nothing to merge
-            return Ok(PullResult {
-                fetch_updated_refs: fetch_result.updated_refs,
-                merge_type: "already_up_to_date".to_owned(),
-                new_head: None,
-            });
-        }
+    let Ok(remote_ref) = repo.find_reference(&remote_ref_name) else {
+        // Remote branch doesn't exist (yet) — nothing to merge
+        return Ok(PullResult {
+            fetch_updated_refs: fetch_result.updated_refs,
+            merge_type: "already_up_to_date".to_owned(),
+            new_head: None,
+        });
     };
 
     let local_oid = local_ref.target().ok_or_else(|| Error::Internal {
@@ -351,7 +346,7 @@ pub fn pull(repo_path: &str, remote_name: &str, branch: &str) -> Result<PullResu
 pub fn remote_tracking_branch(repo_path: &str, branch: &str) -> Result<Option<String>, Error> {
     let repo = open_git2(repo_path)?;
     match repo.branch_upstream_name(&format!("refs/heads/{branch}")) {
-        Ok(buf) => Ok(buf.as_str().map(|s| s.to_owned())),
+        Ok(buf) => Ok(buf.as_str().map(str::to_owned)),
         Err(e) if e.code() == git2::ErrorCode::NotFound => Ok(None),
         Err(e) => Err(Error::internal(e)),
     }
@@ -393,7 +388,7 @@ pub fn ahead_behind_remote(repo_path: &str, branch: &str) -> Result<AheadBehindR
         .map_err(Error::internal)?;
 
     Ok(AheadBehindResult {
-        ahead: ahead as u32,
-        behind: behind as u32,
+        ahead: u32::try_from(ahead).unwrap_or(u32::MAX),
+        behind: u32::try_from(behind).unwrap_or(u32::MAX),
     })
 }

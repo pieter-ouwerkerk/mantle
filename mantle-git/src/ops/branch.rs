@@ -32,16 +32,23 @@ pub fn list_local_branches(repo_path: &str) -> Result<Vec<BranchInfo>, Error> {
         let name = reference.name().as_bstr().to_string();
         let short_name = name.strip_prefix("refs/heads/").unwrap_or(&name).to_owned();
 
-        let (date_str, author, hash, sort_time) = match reference
-            .into_fully_peeled_id()
-        {
+        let (date_str, author, hash, sort_time) = match reference.into_fully_peeled_id() {
             Ok(peeled_id) => {
                 let hash = peeled_id.to_string();
-                match peeled_id.object().ok().and_then(|obj| obj.try_into_commit().ok()) {
+                match peeled_id
+                    .object()
+                    .ok()
+                    .and_then(|obj| obj.try_into_commit().ok())
+                {
                     Some(commit) => {
                         let sig = commit.committer().map_err(Error::internal)?;
                         let time = sig.time().map_err(Error::internal)?;
-                        (format_gix_time(time), sig.name.to_string(), hash, time.seconds)
+                        (
+                            format_gix_time(time),
+                            sig.name.to_string(),
+                            hash,
+                            time.seconds,
+                        )
                     }
                     None => (String::new(), String::new(), hash, 0),
                 }
@@ -77,7 +84,7 @@ pub fn verify_branch_exists(repo_path: &str, branch: &str) -> Result<bool, Error
 }
 
 /// Check whether `branch` is fully merged into `target_branch`.
-/// Returns true if target_branch's tip is a descendant of (or equal to) branch's tip.
+/// Returns true if `target_branch`'s tip is a descendant of (or equal to) `branch`'s tip.
 pub fn branch_is_merged(repo_path: &str, branch: &str, target_branch: &str) -> Result<bool, Error> {
     let repo = git2::Repository::open(repo_path).map_err(Error::internal)?;
 
@@ -86,10 +93,14 @@ pub fn branch_is_merged(repo_path: &str, branch: &str, target_branch: &str) -> R
 
     let branch_oid = repo
         .refname_to_id(&branch_ref)
-        .map_err(|_| Error::RevNotFound { rev: branch.to_owned() })?;
+        .map_err(|_| Error::RevNotFound {
+            rev: branch.to_owned(),
+        })?;
     let target_oid = repo
         .refname_to_id(&target_ref)
-        .map_err(|_| Error::RevNotFound { rev: target_branch.to_owned() })?;
+        .map_err(|_| Error::RevNotFound {
+            rev: target_branch.to_owned(),
+        })?;
 
     if branch_oid == target_oid {
         return Ok(true);
@@ -113,7 +124,10 @@ pub fn list_remote_branches(repo_path: &str) -> Result<Vec<BranchInfo>, Error> {
 
     for reference in remote.flatten() {
         let name = reference.name().as_bstr().to_string();
-        let short_name = name.strip_prefix("refs/remotes/").unwrap_or(&name).to_owned();
+        let short_name = name
+            .strip_prefix("refs/remotes/")
+            .unwrap_or(&name)
+            .to_owned();
 
         // Skip HEAD pointers (e.g. origin/HEAD)
         if short_name.ends_with("/HEAD") {
@@ -168,9 +182,8 @@ pub fn latest_commit_date(repo_path: &str, branch: &str) -> Result<Option<String
     let repo = ts.to_thread_local();
 
     let ref_name = format!("refs/heads/{branch}");
-    let reference = match repo.find_reference(&ref_name) {
-        Ok(r) => r,
-        Err(_) => return Ok(None),
+    let Ok(reference) = repo.find_reference(&ref_name) else {
+        return Ok(None);
     };
 
     let peeled = reference.into_fully_peeled_id().map_err(Error::internal)?;

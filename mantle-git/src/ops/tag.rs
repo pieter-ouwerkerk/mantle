@@ -10,7 +10,7 @@ fn format_git2_time(time: &git2::Time) -> String {
     let offset_mins = time.offset_minutes();
 
     if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
-        let offset = chrono::FixedOffset::east_opt(offset_mins as i32 * 60)
+        let offset = chrono::FixedOffset::east_opt(offset_mins * 60)
             .unwrap_or_else(|| chrono::FixedOffset::east_opt(0).unwrap());
         let dt_with_tz = dt.with_timezone(&offset);
         dt_with_tz.to_rfc3339()
@@ -40,19 +40,17 @@ pub fn list_tags(repo_path: &str) -> Result<Vec<TagInfo>, Error> {
                 .target()
                 .ok()
                 .and_then(|t| t.peel_to_commit().ok())
-                .map(|c| c.id().to_string())
-                .unwrap_or_else(|| tag_obj.target_id().to_string());
+                .map_or_else(|| tag_obj.target_id().to_string(), |c| c.id().to_string());
 
-            let (tagger_name, tagger_email, tagger_date) =
-                if let Some(tagger) = tag_obj.tagger() {
-                    (
-                        tagger.name().map(|s| s.to_string()),
-                        tagger.email().map(|s| s.to_string()),
-                        Some(format_git2_time(&tagger.when())),
-                    )
-                } else {
-                    (None, None, None)
-                };
+            let (tagger_name, tagger_email, tagger_date) = if let Some(tagger) = tag_obj.tagger() {
+                (
+                    tagger.name().map(str::to_string),
+                    tagger.email().map(str::to_string),
+                    Some(format_git2_time(&tagger.when())),
+                )
+            } else {
+                (None, None, None)
+            };
 
             let message = tag_obj
                 .message()

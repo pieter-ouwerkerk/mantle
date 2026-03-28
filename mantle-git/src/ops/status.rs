@@ -30,9 +30,25 @@ impl StatusEntry {
 // Internal: Collect all status entries via gix
 // ---------------------------------------------------------------------------
 
-fn collect_status_entries(repo_path: &str) -> Result<Vec<StatusEntry>, Error> {
+fn tree_index_entry(change: gix::diff::index::ChangeRef<'_, '_>) -> StatusEntry {
     use gix::bstr::ByteSlice;
     use gix::diff::index::ChangeRef as TIChange;
+    let (path_bstr, _idx, _mode, _id) = change.fields();
+    let path = path_bstr.to_str_lossy().to_string();
+    match change {
+        TIChange::Addition { .. } => StatusEntry { index_code: 'A', worktree_code: ' ', path, orig_path: None },
+        TIChange::Deletion { .. } => StatusEntry { index_code: 'D', worktree_code: ' ', path, orig_path: None },
+        TIChange::Modification { .. } => StatusEntry { index_code: 'M', worktree_code: ' ', path, orig_path: None },
+        TIChange::Rewrite { source_location, copy, .. } => {
+            let orig = source_location.to_str_lossy().to_string();
+            let code = if copy { 'C' } else { 'R' };
+            StatusEntry { index_code: code, worktree_code: ' ', path, orig_path: Some(orig) }
+        }
+    }
+}
+
+fn collect_status_entries(repo_path: &str) -> Result<Vec<StatusEntry>, Error> {
+    use gix::bstr::ByteSlice;
     use gix::dir::entry::Status as DirStatus;
     use gix::status::index_worktree;
     use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
@@ -57,34 +73,7 @@ fn collect_status_entries(repo_path: &str) -> Result<Vec<StatusEntry>, Error> {
         match item {
             // ── HEAD-vs-index (staged) changes ──────────────────────
             Item::TreeIndex(change) => {
-                let (path_bstr, _idx, _mode, _id) = change.fields();
-                let path = path_bstr.to_str_lossy().to_string();
-                let code = match &change {
-                    TIChange::Addition { .. } => 'A',
-                    TIChange::Deletion { .. } => 'D',
-                    TIChange::Modification { .. } => 'M',
-                    TIChange::Rewrite {
-                        source_location,
-                        copy,
-                        ..
-                    } => {
-                        let orig = source_location.to_str_lossy().to_string();
-                        let code = if *copy { 'C' } else { 'R' };
-                        entries.push(StatusEntry {
-                            index_code: code,
-                            worktree_code: ' ',
-                            path,
-                            orig_path: Some(orig),
-                        });
-                        continue;
-                    }
-                };
-                entries.push(StatusEntry {
-                    index_code: code,
-                    worktree_code: ' ',
-                    path,
-                    orig_path: None,
-                });
+                entries.push(tree_index_entry(change));
             }
 
             // ── Index-vs-worktree (unstaged) changes ────────────────
@@ -165,7 +154,7 @@ pub fn is_clean(repo_path: &str) -> Result<bool, Error> {
 /// Returns a count of changed files and a porcelain-format output string.
 pub fn status_summary(repo_path: &str) -> Result<StatusSummary, Error> {
     let entries = collect_status_entries(repo_path)?;
-    let file_count = entries.len() as u32;
+    let file_count = u32::try_from(entries.len()).unwrap_or(u32::MAX);
     let output = if entries.is_empty() {
         String::new()
     } else {
@@ -241,7 +230,7 @@ pub fn changed_paths(repo_path: &str) -> Result<Vec<String>, Error> {
 /// Returns whether the worktree is dirty and how many files changed.
 pub fn worktree_status(path: &str) -> Result<WorktreeStatusInfo, Error> {
     let entries = collect_status_entries(path)?;
-    let file_count = entries.len() as u32;
+    let file_count = u32::try_from(entries.len()).unwrap_or(u32::MAX);
     Ok(WorktreeStatusInfo {
         is_dirty: file_count > 0,
         file_count,

@@ -61,7 +61,12 @@ pub fn run_create(name: Option<String>, cwd: Option<String>) {
 
     let wt_str = worktree_path.to_string_lossy().to_string();
 
-    if let Err(e) = mantle_git::worktree_add_new_branch(repo_root.clone(), wt_str.clone(), branch.clone(), "HEAD".to_string()) {
+    if let Err(e) = mantle_git::worktree_add_new_branch(
+        repo_root.clone(),
+        wt_str.clone(),
+        branch.clone(),
+        "HEAD".to_string(),
+    ) {
         eprintln!("error: failed to create worktree: {e}");
         process::exit(1);
     }
@@ -195,7 +200,10 @@ mod tests {
 
     #[test]
     fn test_sanitize_slug_special_chars() {
-        assert_eq!(sanitize_slug("fix/CUT-123: auth bug"), "fix-cut-123-auth-bug");
+        assert_eq!(
+            sanitize_slug("fix/CUT-123: auth bug"),
+            "fix-cut-123-auth-bug"
+        );
     }
 
     #[test]

@@ -32,7 +32,11 @@ fn test_full_workflow() {
         .args(["init", repo_path.to_str().unwrap()])
         .output()
         .unwrap();
-    assert!(output.status.success(), "init failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(repo_path.join(".worktreeinclude").exists());
 
     // Manually add node_modules to .worktreeinclude since auto-detect needs .gitignore
@@ -41,13 +45,20 @@ fn test_full_workflow() {
     // Step 2: cuttlefish worktree create
     let output = Command::new(cuttlefish_bin())
         .args([
-            "worktree", "create",
-            "--name", "test-task",
-            "--cwd", repo_path.to_str().unwrap(),
+            "worktree",
+            "create",
+            "--name",
+            "test-task",
+            "--cwd",
+            repo_path.to_str().unwrap(),
         ])
         .output()
         .unwrap();
-    assert!(output.status.success(), "worktree create failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "worktree create failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -55,13 +66,20 @@ fn test_full_workflow() {
 
     // Verify hydration occurred
     let hydrated_pkg = std::path::Path::new(created_path).join("node_modules/pkg.js");
-    assert!(hydrated_pkg.exists(), "hydration should have cloned node_modules");
+    assert!(
+        hydrated_pkg.exists(),
+        "hydration should have cloned node_modules"
+    );
 
     // Step 3: cuttlefish worktree remove
     let output = Command::new(cuttlefish_bin())
         .args(["worktree", "remove", "--path", created_path, "--force"])
         .output()
         .unwrap();
-    assert!(output.status.success(), "worktree remove failed: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "worktree remove failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(!std::path::Path::new(created_path).exists());
 }

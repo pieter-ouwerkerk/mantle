@@ -9,15 +9,9 @@ mod types;
 use std::collections::HashMap;
 
 pub use error::Error;
-pub use types::*;
 pub use types::MergeStateKind;
+pub use types::*;
 
-use types::{
-    AheadBehindResult, BlameLineInfo, BranchInfo, CommitInfo, CommitMetadataInfo,
-    CommitTreeRefsInfo, ConflictSides, FetchResult, MergeStateInfo, PullResult,
-    PushResult, ReflogEntry, RemoteInfo, RewriteResult, StashEntry, StatusSummary, TagInfo,
-    WorktreeInfo, WorktreeStatusInfo,
-};
 
 // MARK: - Artifact operations
 
@@ -54,19 +48,14 @@ pub fn generate_default_worktreeinclude(
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn bootstrap_worktreeinclude(
-    repo_path: String,
-) -> Result<GeneratedWorktreeinclude, Error> {
+pub fn bootstrap_worktreeinclude(repo_path: String) -> Result<GeneratedWorktreeinclude, Error> {
     ops::artifacts::bootstrap_worktreeinclude(&repo_path)
 }
 
 // MARK: - CoW operations
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn cow_clone_directory(
-    source: String,
-    destination: String,
-) -> Result<CowCloneResult, Error> {
+pub fn cow_clone_directory(source: String, destination: String) -> Result<CowCloneResult, Error> {
     ops::cow::cow_clone_directory(&source, &destination)
 }
 
@@ -88,11 +77,7 @@ pub fn worktree_add_new_branch(
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn worktree_add_existing(
-    repo_path: String,
-    path: String,
-    branch: String,
-) -> Result<(), Error> {
+pub fn worktree_add_existing(repo_path: String, path: String, branch: String) -> Result<(), Error> {
     ops::worktree::worktree_add_existing(&repo_path, &path, &branch)
 }
 
@@ -114,10 +99,7 @@ pub fn worktree_remove_force(repo_path: String, path: String) -> Result<(), Erro
 // MARK: - Blame operations
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn git_blame_file(
-    repo_path: String,
-    file_path: String,
-) -> Result<Vec<BlameLineInfo>, Error> {
+pub fn git_blame_file(repo_path: String, file_path: String) -> Result<Vec<BlameLineInfo>, Error> {
     ops::blame::blame_file(&repo_path, &file_path)
 }
 
@@ -218,10 +200,7 @@ pub fn git_branch_is_merged(
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn git_latest_commit_date(
-    repo_path: String,
-    branch: String,
-) -> Result<Option<String>, Error> {
+pub fn git_latest_commit_date(repo_path: String, branch: String) -> Result<Option<String>, Error> {
     ops::branch::latest_commit_date(&repo_path, &branch)
 }
 
@@ -250,10 +229,7 @@ pub fn git_is_valid_repo(path: String) -> bool {
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn git_rev_list_parents(
-    repo_path: String,
-    commit_hash: String,
-) -> Result<Vec<String>, Error> {
+pub fn git_rev_list_parents(repo_path: String, commit_hash: String) -> Result<Vec<String>, Error> {
     ops::refs::rev_list_parents(&repo_path, &commit_hash)
 }
 
@@ -722,9 +698,6 @@ pub fn git_mark_resolved(repo_path: String, file_path: String) -> Result<(), Err
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn git_conflict_sides(
-    repo_path: String,
-    file_path: String,
-) -> Result<ConflictSides, Error> {
+pub fn git_conflict_sides(repo_path: String, file_path: String) -> Result<ConflictSides, Error> {
     ops::merge::conflict_sides(&repo_path, &file_path)
 }

@@ -49,7 +49,7 @@ pub fn show_file(repo_path: &str, commit_hash: &str, file_path: &str) -> Result<
         .lookup_entry_by_path(file_path)
         .map_err(Error::internal)?
         .ok_or_else(|| Error::Internal {
-            message: format!("Path '{}' not found in commit {}", file_path, commit_hash),
+            message: format!("Path '{file_path}' not found in commit {commit_hash}"),
         })?;
 
     // Read the blob contents
@@ -57,6 +57,6 @@ pub fn show_file(repo_path: &str, commit_hash: &str, file_path: &str) -> Result<
     let data = object.data.as_slice();
 
     String::from_utf8(data.to_vec()).map_err(|_| Error::Internal {
-        message: format!("File '{}' is not valid UTF-8", file_path),
+        message: format!("File '{file_path}' is not valid UTF-8"),
     })
 }

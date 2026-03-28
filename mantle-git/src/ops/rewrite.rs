@@ -81,8 +81,7 @@ fn collect_commit_chain(
     for &oid in &rewrite_set {
         let deg = parent_ids_of
             .get(&oid)
-            .map(|ps| ps.iter().filter(|p| rewrite_set.contains(p)).count())
-            .unwrap_or(0);
+            .map_or(0, |ps| ps.iter().filter(|p| rewrite_set.contains(p)).count());
         in_degree.insert(oid, deg);
     }
 
@@ -189,9 +188,9 @@ fn reparent_commit(
     new_parent: &git2::Commit<'_>,
 ) -> Result<Oid, Error> {
     let tree = commit.tree().map_err(Error::internal)?;
-    let mut parents: Vec<git2::Commit<'_>> = Vec::with_capacity(commit.parent_count() as usize);
+    let mut parents: Vec<git2::Commit<'_>> = Vec::with_capacity(commit.parent_count());
     for i in 0..commit.parent_count() {
-        if i as usize == replace_parent_index {
+        if i == replace_parent_index {
             parents.push(repo.find_commit(new_parent.id()).map_err(Error::internal)?);
         } else {
             parents.push(commit.parent(i).map_err(Error::internal)?);
@@ -213,10 +212,7 @@ fn reparent_commit(
     Ok(new_oid)
 }
 
-fn preflight_checks(
-    repo: &Repository,
-    auto_stash: bool,
-) -> Result<bool, Error> {
+fn preflight_checks(repo: &Repository, auto_stash: bool) -> Result<bool, Error> {
     // Check for detached HEAD
     if repo.head_detached().unwrap_or(false) {
         return Err(Error::DetachedHead);
@@ -272,10 +268,9 @@ fn stash_if_needed(repo: &mut Repository, is_dirty: bool) -> Result<bool, Error>
 }
 
 fn pop_stash(repo: &mut Repository) -> Result<(), Error> {
-    repo.stash_pop(0, None)
-        .map_err(|e| Error::StashPopFailed {
-            message: e.message().to_owned(),
-        })
+    repo.stash_pop(0, None).map_err(|e| Error::StashPopFailed {
+        message: e.message().to_owned(),
+    })
 }
 
 fn create_backup_ref(repo: &Repository, branch: &str) -> Result<String, Error> {
@@ -299,9 +294,7 @@ fn finalize(repo: &Repository, branch_refname: &str, new_tip: Oid) -> Result<(),
     repo.reference(branch_refname, new_tip, true, "reviser rewrite")
         .map_err(Error::internal)?;
     // Reset working tree to new HEAD
-    let obj = repo
-        .find_object(new_tip, None)
-        .map_err(Error::internal)?;
+    let obj = repo.find_object(new_tip, None).map_err(Error::internal)?;
     repo.reset(&obj, git2::ResetType::Hard, None)
         .map_err(Error::internal)?;
     Ok(())
@@ -313,7 +306,7 @@ fn get_branch_refname(repo: &Repository) -> Result<String, Error> {
         return Err(Error::DetachedHead);
     }
     head.name()
-        .map(|s| s.to_owned())
+        .map(str::to_owned)
         .ok_or_else(|| Error::Internal {
             message: "branch ref name is not UTF-8".to_owned(),
         })
@@ -333,7 +326,7 @@ fn format_git2_time(time: &Time) -> String {
 
     // Format as ISO 8601
     if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
-        let offset = chrono::FixedOffset::east_opt(offset_mins as i32 * 60)
+        let offset = chrono::FixedOffset::east_opt(offset_mins * 60)
             .unwrap_or_else(|| chrono::FixedOffset::east_opt(0).unwrap());
         let dt_with_tz = dt.with_timezone(&offset);
         dt_with_tz.to_rfc3339()
@@ -442,14 +435,14 @@ pub fn prune_backup_refs(repo_path: &str, retention_days: u32) -> Result<u32, Er
     }
 
     let repo = open_git2(repo_path)?;
-    let cutoff_secs = chrono::Utc::now().timestamp() - (retention_days as i64 * 86400);
+    let cutoff_secs = chrono::Utc::now().timestamp() - (i64::from(retention_days) * 86400);
     let mut pruned = 0u32;
 
     let refs: Vec<String> = repo
         .references_glob("refs/reviser/backups/*")
         .map_err(Error::internal)?
-        .filter_map(|r| r.ok())
-        .filter_map(|r| r.name().map(|n| n.to_owned()))
+        .filter_map(Result::ok)
+        .filter_map(|r| r.name().map(str::to_owned))
         .collect();
 
     for refname in refs {
@@ -540,10 +533,8 @@ pub fn rewrite_commit_author(
     if result.is_err() && stashed {
         let _ = pop_stash(&mut repo);
     }
-    if let Ok(_) = &result {
-        if stashed {
-            pop_stash(&mut repo)?;
-        }
+    if result.is_ok() && stashed {
+        pop_stash(&mut repo)?;
     }
 
     result
@@ -620,10 +611,8 @@ pub fn rewrite_commit_date(
     if result.is_err() && stashed {
         let _ = pop_stash(&mut repo);
     }
-    if let Ok(_) = &result {
-        if stashed {
-            pop_stash(&mut repo)?;
-        }
+    if result.is_ok() && stashed {
+        pop_stash(&mut repo)?;
     }
 
     result
@@ -686,10 +675,8 @@ pub fn rewrite_commit_message(
     if result.is_err() && stashed {
         let _ = pop_stash(&mut repo);
     }
-    if let Ok(_) = &result {
-        if stashed {
-            pop_stash(&mut repo)?;
-        }
+    if result.is_ok() && stashed {
+        pop_stash(&mut repo)?;
     }
 
     result
@@ -699,11 +686,7 @@ pub fn rewrite_commit_message(
 // Public API — cherry-pick
 // ---------------------------------------------------------------------------
 
-pub fn cherry_pick(
-    repo_path: &str,
-    commit_hash: &str,
-    auto_stash: bool,
-) -> Result<String, Error> {
+pub fn cherry_pick(repo_path: &str, commit_hash: &str, auto_stash: bool) -> Result<String, Error> {
     let mut repo = open_git2(repo_path)?;
     let branch_refname = get_branch_refname(&repo)?;
 
@@ -749,9 +732,9 @@ pub fn cherry_pick_to_branch(
     target_branch: &str,
     auto_stash: bool,
 ) -> Result<String, Error> {
-    let target_refname = format!("refs/heads/{}", target_branch);
+    let target_refname = format!("refs/heads/{target_branch}");
 
-    let mut repo = open_git2(repo_path)?;
+    let repo = open_git2(repo_path)?;
 
     // Resolve the source commit
     let source_oid = repo
@@ -768,7 +751,7 @@ pub fn cherry_pick_to_branch(
             rev: target_branch.to_owned(),
         })?;
     let target_oid = target_ref.target().ok_or_else(|| Error::Internal {
-        message: format!("branch {} has no target", target_branch),
+        message: format!("branch {target_branch} has no target"),
     })?;
 
     // Check if target is the HEAD branch — if so, use the full cherry_pick flow
@@ -776,8 +759,7 @@ pub fn cherry_pick_to_branch(
     let is_head_branch = repo
         .head()
         .ok()
-        .and_then(|h| h.name().map(|n| n == target_refname))
-        .unwrap_or(false);
+        .is_some_and(|h| h.name().is_some_and(|n| n == target_refname));
 
     if is_head_branch {
         return cherry_pick(repo_path, commit_hash, auto_stash);
@@ -798,6 +780,41 @@ pub fn cherry_pick_to_branch(
 // ---------------------------------------------------------------------------
 // Public API — fixup/squash
 // ---------------------------------------------------------------------------
+
+fn merge_fixup_trees(
+    repo: &git2::Repository,
+    target_oids: &[Oid],
+    earliest_oid: Oid,
+    start_tree_oid: git2::Oid,
+) -> Result<git2::Oid, Error> {
+    let mut merged_tree_oid = start_tree_oid;
+    for &oid in target_oids {
+        if oid == earliest_oid {
+            continue;
+        }
+        let fixup_commit = repo.find_commit(oid).map_err(Error::internal)?;
+        let fixup_tree = fixup_commit.tree().map_err(Error::internal)?;
+        let ancestor_tree = if fixup_commit.parent_count() > 0 {
+            fixup_commit.parent(0).map_err(Error::internal)?.tree().map_err(Error::internal)?
+        } else {
+            repo.find_tree(repo.treebuilder(None).map_err(Error::internal)?.write().map_err(Error::internal)?).map_err(Error::internal)?
+        };
+        let our_tree = repo.find_tree(merged_tree_oid).map_err(Error::internal)?;
+        let mut index = repo.merge_trees(&ancestor_tree, &our_tree, &fixup_tree, None)
+            .map_err(|e| if e.code() == git2::ErrorCode::Conflict {
+                Error::CherryPickConflict { hash: oid.to_string(), details: e.message().to_owned() }
+            } else {
+                Error::internal(e)
+            })?;
+        if index.has_conflicts() {
+            return Err(Error::CherryPickConflict {
+                hash: oid.to_string(), details: "fixup produced conflicts".to_owned(),
+            });
+        }
+        merged_tree_oid = index.write_tree_to(repo).map_err(Error::internal)?;
+    }
+    Ok(merged_tree_oid)
+}
 
 pub fn fixup_commits(
     repo_path: &str,
@@ -860,61 +877,11 @@ pub fn fixup_commits(
         let earliest_oid = all_chain[earliest_idx];
         let earliest_commit = repo.find_commit(earliest_oid).map_err(Error::internal)?;
 
-        // Merge trees: start from earliest's tree, then for each fixup commit,
-        // apply its diff (parent_tree → commit_tree) onto the accumulated tree.
-        let mut merged_tree_oid = earliest_commit.tree_id();
-
-        for &oid in &target_oids {
-            if oid == earliest_oid {
-                continue;
-            }
-            let fixup_commit = repo.find_commit(oid).map_err(Error::internal)?;
-            let fixup_tree = fixup_commit.tree().map_err(Error::internal)?;
-            let ancestor_tree = if fixup_commit.parent_count() > 0 {
-                fixup_commit
-                    .parent(0)
-                    .map_err(Error::internal)?
-                    .tree()
-                    .map_err(Error::internal)?
-            } else {
-                // Root commit — use empty tree as ancestor
-                repo.find_tree(
-                    repo.treebuilder(None)
-                        .map_err(Error::internal)?
-                        .write()
-                        .map_err(Error::internal)?,
-                )
-                .map_err(Error::internal)?
-            };
-
-            let our_tree = repo
-                .find_tree(merged_tree_oid)
-                .map_err(Error::internal)?;
-            let mut index = repo
-                .merge_trees(&ancestor_tree, &our_tree, &fixup_tree, None)
-                .map_err(|e| {
-                    if e.code() == git2::ErrorCode::Conflict {
-                        Error::CherryPickConflict {
-                            hash: oid.to_string(),
-                            details: e.message().to_owned(),
-                        }
-                    } else {
-                        Error::internal(e)
-                    }
-                })?;
-            if index.has_conflicts() {
-                return Err(Error::CherryPickConflict {
-                    hash: oid.to_string(),
-                    details: "fixup produced conflicts".to_owned(),
-                });
-            }
-            merged_tree_oid = index.write_tree_to(&repo).map_err(Error::internal)?;
-        }
+        let merged_tree_oid =
+            merge_fixup_trees(&repo, &target_oids, earliest_oid, earliest_commit.tree_id())?;
 
         // Create the squashed commit with the earliest commit's metadata
-        let merged_tree = repo
-            .find_tree(merged_tree_oid)
-            .map_err(Error::internal)?;
+        let merged_tree = repo.find_tree(merged_tree_oid).map_err(Error::internal)?;
         let parents: Vec<git2::Commit<'_>> = earliest_commit
             .parent_ids()
             .map(|id| repo.find_commit(id).map_err(Error::internal))
@@ -965,10 +932,8 @@ pub fn fixup_commits(
     if result.is_err() && stashed {
         let _ = pop_stash(&mut repo);
     }
-    if let Ok(_) = &result {
-        if stashed {
-            pop_stash(&mut repo)?;
-        }
+    if result.is_ok() && stashed {
+        pop_stash(&mut repo)?;
     }
 
     result

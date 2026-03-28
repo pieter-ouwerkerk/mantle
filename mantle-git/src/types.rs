@@ -26,7 +26,7 @@ pub enum HydrationStrategy {
     CowClone,
     DelegateToPnpm,
     /// Reserved for future use. Originally intended for sccache injection into
-    /// Rust `target/` directories, but CoW clone handles all artifact types
+    /// Rust `target/` directories, but `CoW` clone handles all artifact types
     /// (including Rust) effectively. Currently never returned by `resolve_strategy()`.
     InjectCache,
     Skip,

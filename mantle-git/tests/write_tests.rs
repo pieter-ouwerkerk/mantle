@@ -93,7 +93,10 @@ fn test_reset_soft_preserves_index_and_worktree() {
 
     // The changes should be staged (index has the second version)
     let status = run_git(&repo.path, &["status", "--porcelain"]);
-    assert!(status.contains("M  a.txt") || status.contains("M "), "expected staged changes, got: {status}");
+    assert!(
+        status.contains("M  a.txt") || status.contains("M "),
+        "expected staged changes, got: {status}"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -128,11 +131,17 @@ fn test_reset_mixed_preserves_worktree_but_unstages() {
     // git status --porcelain shows " M" for unstaged-only, but some git versions
     // may show "M " when both index and worktree differ. Just verify it's modified and not clean.
     let status = run_git(&repo.path, &["status", "--porcelain"]);
-    assert!(status.contains("M") && status.contains("a.txt"), "expected modified a.txt, got: {status}");
+    assert!(
+        status.contains("M") && status.contains("a.txt"),
+        "expected modified a.txt, got: {status}"
+    );
 
     // Verify it's NOT staged by checking diff --cached (should be empty after mixed reset)
     let cached = run_git(&repo.path, &["diff", "--cached", "--name-only"]);
-    assert!(cached.is_empty(), "expected no staged changes after mixed reset, got: {cached}");
+    assert!(
+        cached.is_empty(),
+        "expected no staged changes after mixed reset, got: {cached}"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -172,14 +181,20 @@ fn test_reset_staging_on_unborn_branch() {
 
     // Verify file is staged
     let staged = run_git(&repo.path, &["diff", "--cached", "--name-only"]);
-    assert!(staged.contains("a.txt"), "expected a.txt staged, got: {staged}");
+    assert!(
+        staged.contains("a.txt"),
+        "expected a.txt staged, got: {staged}"
+    );
 
     // reset_staging should succeed on unborn branch
     git_reset_staging(repo.path_str()).unwrap();
 
     // File should now be unstaged
     let staged_after = run_git(&repo.path, &["diff", "--cached", "--name-only"]);
-    assert!(staged_after.is_empty(), "expected no staged files, got: {staged_after}");
+    assert!(
+        staged_after.is_empty(),
+        "expected no staged files, got: {staged_after}"
+    );
 }
 
 #[test]
@@ -192,7 +207,10 @@ fn test_commit_on_unborn_branch() {
 
     // Verify the commit exists
     let log = run_git(&repo.path, &["log", "--oneline"]);
-    assert!(log.contains("initial commit"), "expected commit in log, got: {log}");
+    assert!(
+        log.contains("initial commit"),
+        "expected commit in log, got: {log}"
+    );
 }
 
 #[test]

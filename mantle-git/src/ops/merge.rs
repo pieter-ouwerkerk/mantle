@@ -14,10 +14,7 @@ fn resolve_git_dir(repo_path: &str) -> Result<std::path::PathBuf, Error> {
     if dot_git.is_file() {
         // Worktree: .git is a file containing "gitdir: <path>"
         let content = std::fs::read_to_string(&dot_git).map_err(Error::internal)?;
-        let gitdir = content
-            .strip_prefix("gitdir: ")
-            .unwrap_or(&content)
-            .trim();
+        let gitdir = content.strip_prefix("gitdir: ").unwrap_or(&content).trim();
         let gitdir_path = Path::new(gitdir);
         if gitdir_path.is_absolute() {
             Ok(gitdir_path.to_path_buf())
@@ -72,7 +69,7 @@ pub fn merge_state(repo_path: &str) -> Result<MergeStateInfo, Error> {
     })
 }
 
-/// Read the branch being merged from MERGE_MSG or MERGE_HEAD.
+/// Read the branch being merged from `MERGE_MSG` or `MERGE_HEAD`.
 fn read_merge_branch(git_dir: &Path) -> Option<String> {
     // Try MERGE_MSG first — usually contains "Merge branch 'name'"
     if let Ok(msg) = std::fs::read_to_string(git_dir.join("MERGE_MSG")) {
@@ -103,7 +100,7 @@ fn count_conflicts(repo_path: &str) -> Result<u32, Error> {
     let repo = open_git2(repo_path)?;
     let index = repo.index().map_err(Error::internal)?;
     let conflicts = index.conflicts().map_err(Error::internal)?;
-    Ok(conflicts.count() as u32)
+    Ok(u32::try_from(conflicts.count()).unwrap_or(u32::MAX))
 }
 
 /// List all conflict file paths from the index.
@@ -121,9 +118,7 @@ pub fn list_conflict_paths(repo_path: &str) -> Result<Vec<String>, Error> {
             .as_ref()
             .or(conflict.their.as_ref())
             .or(conflict.ancestor.as_ref())
-            .map(|entry| {
-                String::from_utf8_lossy(&entry.path).to_string()
-            });
+            .map(|entry| String::from_utf8_lossy(&entry.path).to_string());
         if let Some(p) = path {
             paths.push(p);
         }

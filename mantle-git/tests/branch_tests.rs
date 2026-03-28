@@ -56,17 +56,16 @@ fn test_branch_is_merged_after_merge() {
     run_git(&repo.path, &["checkout", "main"]);
 
     // Before merge, feature is NOT merged into main
-    assert!(
-        !git_branch_is_merged(repo.path_str(), "feature".into(), "main".into()).unwrap()
-    );
+    assert!(!git_branch_is_merged(repo.path_str(), "feature".into(), "main".into()).unwrap());
 
     // Merge feature into main
-    run_git(&repo.path, &["merge", "feature", "--no-ff", "-m", "merge feature"]);
+    run_git(
+        &repo.path,
+        &["merge", "feature", "--no-ff", "-m", "merge feature"],
+    );
 
     // After merge, feature IS merged into main
-    assert!(
-        git_branch_is_merged(repo.path_str(), "feature".into(), "main".into()).unwrap()
-    );
+    assert!(git_branch_is_merged(repo.path_str(), "feature".into(), "main".into()).unwrap());
 }
 
 #[test]
@@ -76,9 +75,7 @@ fn test_branch_is_merged_same_commit() {
 
     // Create branch at same commit — it's trivially merged
     run_git(&repo.path, &["branch", "same-point"]);
-    assert!(
-        git_branch_is_merged(repo.path_str(), "same-point".into(), "main".into()).unwrap()
-    );
+    assert!(git_branch_is_merged(repo.path_str(), "same-point".into(), "main".into()).unwrap());
 }
 
 #[test]
@@ -92,12 +89,8 @@ fn test_branch_is_merged_with_diverged_branches() {
     repo.commit("c.txt", "main work", "main commit");
 
     // Branches diverged — neither is merged into the other
-    assert!(
-        !git_branch_is_merged(repo.path_str(), "feature".into(), "main".into()).unwrap()
-    );
-    assert!(
-        !git_branch_is_merged(repo.path_str(), "main".into(), "feature".into()).unwrap()
-    );
+    assert!(!git_branch_is_merged(repo.path_str(), "feature".into(), "main".into()).unwrap());
+    assert!(!git_branch_is_merged(repo.path_str(), "main".into(), "feature".into()).unwrap());
 }
 
 #[test]
@@ -110,13 +103,9 @@ fn test_branch_is_merged_fast_forward() {
     repo.commit("b.txt", "new", "advance main");
 
     // old-feature is an ancestor of main => merged
-    assert!(
-        git_branch_is_merged(repo.path_str(), "old-feature".into(), "main".into()).unwrap()
-    );
+    assert!(git_branch_is_merged(repo.path_str(), "old-feature".into(), "main".into()).unwrap());
     // main is NOT an ancestor of old-feature
-    assert!(
-        !git_branch_is_merged(repo.path_str(), "main".into(), "old-feature".into()).unwrap()
-    );
+    assert!(!git_branch_is_merged(repo.path_str(), "main".into(), "old-feature".into()).unwrap());
 }
 
 #[test]
@@ -128,7 +117,10 @@ fn test_latest_commit_date_returns_iso8601() {
     assert!(date.is_some());
     let date_str = date.unwrap();
     // Should be parseable as RFC 3339 / ISO 8601
-    assert!(date_str.contains("T"), "Expected ISO 8601 format, got: {date_str}");
+    assert!(
+        date_str.contains("T"),
+        "Expected ISO 8601 format, got: {date_str}"
+    );
 }
 
 #[test]

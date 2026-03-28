@@ -9,11 +9,9 @@ pub fn is_valid_repo(path: &str) -> bool {
 pub fn rev_parse(repo_path: &str, rev: &str) -> Result<String, Error> {
     let ts = repo::open(repo_path)?;
     let repo = ts.to_thread_local();
-    let object = repo
-        .rev_parse_single(rev)
-        .map_err(|_| Error::RevNotFound {
-            rev: rev.to_owned(),
-        })?;
+    let object = repo.rev_parse_single(rev).map_err(|_| Error::RevNotFound {
+        rev: rev.to_owned(),
+    })?;
     Ok(object.detach().to_hex().to_string())
 }
 
@@ -95,16 +93,14 @@ pub fn commit_tree_and_refs(
         // Format tags with "tag: " prefix
         if reference
             .name()
-            .map(|n| n.starts_with("refs/tags/"))
-            .unwrap_or(false)
+            .is_some_and(|n| n.starts_with("refs/tags/"))
         {
             decorations.push(format!("tag: {name}"));
         } else {
             // Skip branch names that are part of the HEAD decoration
             let already_in_head = decorations
                 .first()
-                .map(|d| d == &format!("HEAD -> {name}"))
-                .unwrap_or(false);
+                .is_some_and(|d| d == &format!("HEAD -> {name}"));
             if !already_in_head {
                 decorations.push(name);
             }
@@ -121,23 +117,19 @@ pub fn commit_tree_and_refs(
 pub fn ahead_behind(repo_path: &str, ref1: &str, ref2: &str) -> Result<AheadBehindResult, Error> {
     let repo = git2::Repository::open(repo_path).map_err(Error::internal)?;
 
-    let obj1 = repo
-        .revparse_single(ref1)
-        .map_err(|_| Error::RevNotFound {
-            rev: ref1.to_owned(),
-        })?;
-    let obj2 = repo
-        .revparse_single(ref2)
-        .map_err(|_| Error::RevNotFound {
-            rev: ref2.to_owned(),
-        })?;
+    let obj1 = repo.revparse_single(ref1).map_err(|_| Error::RevNotFound {
+        rev: ref1.to_owned(),
+    })?;
+    let obj2 = repo.revparse_single(ref2).map_err(|_| Error::RevNotFound {
+        rev: ref2.to_owned(),
+    })?;
 
     let (ahead, behind) = repo
         .graph_ahead_behind(obj1.id(), obj2.id())
         .map_err(Error::internal)?;
 
     Ok(AheadBehindResult {
-        ahead: ahead as u32,
-        behind: behind as u32,
+        ahead: u32::try_from(ahead).unwrap_or(u32::MAX),
+        behind: u32::try_from(behind).unwrap_or(u32::MAX),
     })
 }

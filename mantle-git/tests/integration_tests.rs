@@ -1575,7 +1575,10 @@ fn test_stash_show() {
     run_git(&repo.path, &["stash", "push", "-m", "test stash"]);
 
     let diff = git_stash_show(repo.path_str(), 0).unwrap();
-    assert!(diff.contains("file.txt"), "diff should mention the changed file");
+    assert!(
+        diff.contains("file.txt"),
+        "diff should mention the changed file"
+    );
     assert!(diff.contains("-original"), "diff should show removed line");
     assert!(diff.contains("+modified"), "diff should show added line");
 }
