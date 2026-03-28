@@ -520,6 +520,7 @@ pub fn git_ahead_behind_remote(
 
 // MARK: - Blob operations
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn git_blob_oids(repo_path: String) -> Result<HashMap<String, String>, Error> {
     ops::blob::blob_oids(&repo_path)
 }
