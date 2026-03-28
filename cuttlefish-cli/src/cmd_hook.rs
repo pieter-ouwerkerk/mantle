@@ -7,6 +7,10 @@ use serde_json::json;
 
 use crate::cmd_worktree;
 use crate::util::{resolve_repo_root, resolve_repo_root_from_file};
+#[cfg(feature = "cuttlefish-app")]
+use crate::config::Config;
+#[cfg(feature = "cuttlefish-app")]
+use crate::socket::{SocketClient, SocketMessage};
 
 #[derive(Deserialize)]
 struct HookEvent {
@@ -17,6 +21,8 @@ struct HookEvent {
     #[serde(alias = "tool_input")]
     tool_input: Option<serde_json::Value>,
     session_id: Option<String>,
+    model: Option<String>,
+    cwd: Option<String>,
 }
 
 const WHITELIST: &[&str] = &[".claude/", "CLAUDE.md", "AGENTS.md"];
@@ -30,12 +36,29 @@ pub fn run() {
         "PreToolUse" => handle_pre_tool_use(&event),
         "WorktreeCreate" => handle_worktree_create(),
         "WorktreeRemove" => handle_worktree_remove(),
+        #[cfg(feature = "cuttlefish-app")]
+        "SessionStart" | "SessionStop" => handle_session_event(&event),
+        #[cfg(feature = "cuttlefish-app")]
+        "PostToolUse" => handle_post_tool_use(&event),
         _ => {}
     }
 }
 
 fn handle_pre_tool_use(event: &HookEvent) {
     let tool = event.tool_name.as_deref().unwrap_or("");
+
+    #[cfg(feature = "cuttlefish-app")]
+    {
+        if tool == "Agent" {
+            if let Some(input) = &event.tool_input {
+                if let Some(subagent_type) = input.get("subagent_type").and_then(|v| v.as_str()) {
+                    if subagent_type == "Explore" {
+                        try_briefing_nudge(event);
+                    }
+                }
+            }
+        }
+    }
 
     if !matches!(tool, "Edit" | "Write" | "NotebookEdit") {
         return;
@@ -185,4 +208,55 @@ fn read_event() -> Option<HookEvent> {
         return None;
     }
     serde_json::from_str(&buf).ok()
+}
+
+#[cfg(feature = "cuttlefish-app")]
+fn handle_session_event(event: &HookEvent) {
+    let Some(mut client) = SocketClient::connect() else { return };
+    let mut msg = SocketMessage::new("hook_event");
+    msg.hook_event_name = event.event.clone();
+    msg.hook_session_id = event.session_id.clone();
+    msg.hook_model = event.model.clone();
+    msg.path = event.cwd.clone();
+    client.send_fire_and_forget(&mut msg);
+}
+
+#[cfg(feature = "cuttlefish-app")]
+fn handle_post_tool_use(event: &HookEvent) {
+    let Some(mut client) = SocketClient::connect() else { return };
+    let mut msg = SocketMessage::new("hook_event");
+    msg.hook_event_name = Some("PostToolUse".to_string());
+    msg.hook_session_id = event.session_id.clone();
+    msg.hook_tool_name = event.tool_name.clone();
+    msg.path = event.cwd.clone();
+    msg.file_path = event.tool_input.as_ref()
+        .and_then(|v| v.get("file_path").or(v.get("path")))
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    client.send_fire_and_forget(&mut msg);
+}
+
+#[cfg(feature = "cuttlefish-app")]
+fn try_briefing_nudge(event: &HookEvent) {
+    let session_id = event.session_id.as_deref().unwrap_or("unknown");
+    let hash = crate::cmd_worktree::sha256_prefix(session_id);
+    let nudge_file = std::path::PathBuf::from("/tmp").join(format!("cuttlefish-briefing-nudged-{hash}"));
+
+    if nudge_file.exists() {
+        return;
+    }
+    let _ = std::fs::write(&nudge_file, "1");
+
+    let config = Config::load();
+    let mode = config.nudge_mode();
+
+    if mode == "enforce" {
+        let response = serde_json::json!({
+            "permissionDecision": "deny",
+            "reason": "Use the get_task_briefing MCP tool instead of spawning an Explore agent. It provides pre-computed context about the codebase."
+        });
+        println!("{response}");
+        std::process::exit(0);
+    }
+    eprintln!("hint: consider using get_task_briefing MCP tool instead of Explore for faster context");
 }
