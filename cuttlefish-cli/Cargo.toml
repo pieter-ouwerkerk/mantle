@@ -1,6 +1,6 @@
 [package]
 name = "cuttlefish-cli"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "CLI for CoW-accelerated git worktree hydration"
 license = "MIT OR Apache-2.0"
@@ -15,8 +15,8 @@ default = []
 cuttlefish-app = []
 
 [dependencies]
-lamella = { path = "../mantle" }
-mantle-git = { path = "../mantle-git" }
+lamella = { version = "0.1", path = "../mantle" }
+mantle-git = { version = "0.1", path = "../mantle-git" }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
