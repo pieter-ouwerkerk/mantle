@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+mod cmd_doctor;
 mod cmd_hook;
 mod cmd_hydrate;
 mod cmd_init;
@@ -64,6 +65,13 @@ enum Commands {
         action: WorktreeAction,
     },
 
+    /// Check Cuttlefish integration health for a repository
+    Doctor {
+        /// Repository path (default: current directory)
+        #[arg(default_value = ".")]
+        path: String,
+    },
+
     /// Handle Claude Code / Codex hook events (reads JSON from stdin)
     Hook,
 
@@ -116,6 +124,7 @@ fn main() {
             WorktreeAction::Create { name, cwd } => cmd_worktree::run_create(name, cwd),
             WorktreeAction::Remove { path, force } => cmd_worktree::run_remove(path, force),
         },
+        Commands::Doctor { path } => cmd_doctor::run(&path),
         Commands::Hook => cmd_hook::run(),
         #[cfg(feature = "cuttlefish-app")]
         Commands::Open { path, dry_run } => cmd_open::run(&path, dry_run),
