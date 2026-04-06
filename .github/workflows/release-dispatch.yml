@@ -9,7 +9,7 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger CLI release in cuttlefish-releases
+      - name: Trigger crate release in cuttlefish-releases
         env:
           GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
         run: |

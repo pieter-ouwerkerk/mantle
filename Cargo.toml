@@ -1,5 +1,5 @@
 [workspace]
-members = ["mantle-git", "mantle", "cuttlefish-cli"]
+members = ["mantle-git", "mantle"]
 resolver = "2"
 
 [workspace.lints.clippy]
