@@ -8,6 +8,8 @@ mod cmd_open;
 mod cmd_worktree;
 #[cfg(feature = "cuttlefish-app")]
 mod config;
+mod hooks_config;
+mod managed_section;
 mod permissions;
 #[cfg(feature = "cuttlefish-app")]
 mod socket;
