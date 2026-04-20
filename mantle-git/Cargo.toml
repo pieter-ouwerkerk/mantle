@@ -1,6 +1,6 @@
 [package]
 name = "mantle-git"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "CoW-accelerated git worktree hydration"
 license = "MIT OR Apache-2.0"
@@ -27,6 +27,7 @@ gix = { version = "0.79", default-features = false, features = [
 git2 = { version = "0.20", default-features = false, features = [
     "vendored-libgit2",
     "ssh",
+    "https",
     "vendored-openssl",
 ] }
 gix-ignore = "0.19"
