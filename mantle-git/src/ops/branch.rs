@@ -202,10 +202,7 @@ pub fn latest_commit_date(repo_path: &str, branch: &str) -> Result<Option<String
 
 /// List local branches whose tips are reachable from `target_branch`
 /// (equivalent to `git branch --merged <target> --format=%(refname:short)`).
-pub fn merged_branch_names(
-    repo_path: &str,
-    target_branch: &str,
-) -> Result<Vec<String>, GitError> {
+pub fn merged_branch_names(repo_path: &str, target_branch: &str) -> Result<Vec<String>, GitError> {
     let repo = git2::Repository::open(repo_path).map_err(GitError::internal)?;
     let target_oid = repo
         .revparse_single(target_branch)

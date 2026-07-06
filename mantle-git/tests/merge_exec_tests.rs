@@ -133,7 +133,10 @@ fn test_diff_name_only_three_dot_matches_cli() {
 #[test]
 fn test_merge_tree_clean_matches_cli_tree_oid() {
     let repo = diverged_repo();
-    let cli_tree = run_git(&repo.path, &["merge-tree", "--write-tree", "main", "feature"]);
+    let cli_tree = run_git(
+        &repo.path,
+        &["merge-tree", "--write-tree", "main", "feature"],
+    );
     let native = git_merge_tree(repo.path_str(), "main".into(), "feature".into()).unwrap();
     assert!(native.clean);
     assert_eq!(cli_tree.lines().next().unwrap_or(""), native.tree_oid);
@@ -165,7 +168,11 @@ fn test_merge_no_ff_clean_creates_merge_commit() {
     let had_conflicts = git_merge_no_ff(repo.path_str(), "feature".into()).unwrap();
     assert!(!had_conflicts);
     let parents = run_git(&repo.path, &["rev-list", "--parents", "-1", "HEAD"]);
-    assert_eq!(parents.split_whitespace().count(), 3, "expected a merge commit");
+    assert_eq!(
+        parents.split_whitespace().count(),
+        3,
+        "expected a merge commit"
+    );
 }
 
 #[test]
@@ -202,7 +209,11 @@ fn test_merge_continue_after_resolution() {
     git_merge_continue(repo.path_str()).unwrap();
     assert!(!repo.path.join(".git/MERGE_HEAD").exists());
     let parents = run_git(&repo.path, &["rev-list", "--parents", "-1", "HEAD"]);
-    assert_eq!(parents.split_whitespace().count(), 3, "expected a merge commit");
+    assert_eq!(
+        parents.split_whitespace().count(),
+        3,
+        "expected a merge commit"
+    );
 }
 
 // ---------------------------------------------------------------------------

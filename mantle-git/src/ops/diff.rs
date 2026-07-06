@@ -1176,11 +1176,7 @@ pub fn diff_name_status(
 /// List changed file names between the merge base of `base`/`head` and `head`
 /// (equivalent to `git diff --name-only base...head` — three-dot semantics).
 /// For renames only the destination path is listed, matching the CLI.
-pub fn diff_name_only(
-    repo_path: &str,
-    base: &str,
-    head: &str,
-) -> Result<Vec<String>, GitError> {
+pub fn diff_name_only(repo_path: &str, base: &str, head: &str) -> Result<Vec<String>, GitError> {
     let repo = open_git2(repo_path)?;
     let base_commit = resolve_git2_commit(&repo, base)?;
     let head_commit = resolve_git2_commit(&repo, head)?;

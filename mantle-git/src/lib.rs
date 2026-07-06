@@ -721,11 +721,7 @@ pub fn git_conflict_sides(repo_path: String, file_path: String) -> Result<Confli
 // MARK: - Merge execution, merge-tree, and rebase operations
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn git_merge_base(
-    repo_path: String,
-    ref1: String,
-    ref2: String,
-) -> Result<String, GitError> {
+pub fn git_merge_base(repo_path: String, ref1: String, ref2: String) -> Result<String, GitError> {
     ops::merge::merge_base(&repo_path, &ref1, &ref2)
 }
 

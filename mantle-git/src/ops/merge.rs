@@ -214,10 +214,7 @@ fn run_git_cmd(repo_path: &str, args: &[&str]) -> Result<String, GitError> {
 // ---------------------------------------------------------------------------
 
 /// Resolve a revision string (branch name, remote ref, or OID) to a commit.
-fn resolve_commit<'r>(
-    repo: &'r git2::Repository,
-    rev: &str,
-) -> Result<git2::Commit<'r>, GitError> {
+fn resolve_commit<'r>(repo: &'r git2::Repository, rev: &str) -> Result<git2::Commit<'r>, GitError> {
     repo.revparse_single(rev)
         .and_then(|obj| obj.peel_to_commit())
         .map_err(|_| GitError::RevNotFound {
@@ -327,7 +324,11 @@ fn git_failed(args: &[&str], stdout: &str, stderr: &str) -> GitError {
         message: format!(
             "git {} failed: {}",
             args.join(" "),
-            if stderr.trim().is_empty() { stdout } else { stderr }
+            if stderr.trim().is_empty() {
+                stdout
+            } else {
+                stderr
+            }
         ),
     }
 }
