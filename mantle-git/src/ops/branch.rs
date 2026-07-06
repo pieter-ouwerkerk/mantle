@@ -68,7 +68,7 @@ pub fn list_local_branches(repo_path: &str) -> Result<Vec<BranchInfo>, GitError>
     }
 
     // Sort by date descending (newest first)
-    branches.sort_by(|a, b| b.1.cmp(&a.1));
+    branches.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     Ok(branches.into_iter().map(|(info, _)| info).collect())
 }
@@ -174,7 +174,7 @@ pub fn list_remote_branches(repo_path: &str) -> Result<Vec<BranchInfo>, GitError
     }
 
     // Sort by date descending (newest first)
-    branches.sort_by(|a, b| b.1.cmp(&a.1));
+    branches.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     Ok(branches.into_iter().map(|(info, _)| info).collect())
 }

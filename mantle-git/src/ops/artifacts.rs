@@ -184,7 +184,7 @@ fn walk_tree(
                     });
                 } else {
                     // File → FileCandidate
-                    let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                    let size_bytes = entry.metadata().map_or(0, |m| m.len());
                     file_candidates.push(FileCandidate {
                         relative_path: rel_str.to_string(),
                         absolute_path: path.to_string_lossy().to_string(),
@@ -239,7 +239,7 @@ fn walkdir(path: &Path) -> u64 {
         let Ok(ft) = entry.file_type() else { continue };
 
         if ft.is_file() {
-            total += entry.metadata().map(|m| m.len()).unwrap_or(0);
+            total += entry.metadata().map_or(0, |m| m.len());
         } else if ft.is_dir() {
             total += walkdir(&entry.path());
         }
@@ -344,7 +344,7 @@ fn collect_matched_entries(
             let size = if is_dir {
                 dir_size(&entry.path())
             } else {
-                entry.metadata().map(|m| m.len()).unwrap_or(0)
+                entry.metadata().map_or(0, |m| m.len())
             };
             entries.push(EffectiveEntry {
                 path: name.clone(),
