@@ -40,9 +40,18 @@ jobs:
           NOTES
           )"
 
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: pieter-ouwerkerk
+          repositories: cuttlefish-releases
+
       - name: Trigger crate publish in cuttlefish-releases
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh workflow run cli-release.yml \
             --repo pieter-ouwerkerk/cuttlefish-releases \
