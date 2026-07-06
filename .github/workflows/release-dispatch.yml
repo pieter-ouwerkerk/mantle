@@ -1,15 +1,46 @@
-name: Trigger Release
+name: Release
 
 on:
   push:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
-  dispatch:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger crate release in cuttlefish-releases
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists — skipping"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "mantle $GITHUB_REF_NAME" \
+            --notes "$(cat <<NOTES
+          **mantle-git** — cross-platform git operations library with APFS copy-on-write cloning.
+          **lamella** — hydration orchestration (scan, filter, CoW-clone).
+
+          ## Install
+
+          \`\`\`toml
+          [dependencies]
+          mantle-git = "0.1"
+          lamella = "0.1"
+          \`\`\`
+
+          - [mantle-git on crates.io](https://crates.io/crates/mantle-git)
+          - [lamella on crates.io](https://crates.io/crates/lamella)
+          NOTES
+          )"
+
+      - name: Trigger crate publish in cuttlefish-releases
         env:
           GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
         run: |
