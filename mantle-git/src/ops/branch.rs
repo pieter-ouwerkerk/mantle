@@ -199,3 +199,41 @@ pub fn latest_commit_date(repo_path: &str, branch: &str) -> Result<Option<String
     let time = sig.time().map_err(GitError::internal)?;
     Ok(Some(format_gix_time(time)))
 }
+
+/// List local branches whose tips are reachable from `target_branch`
+/// (equivalent to `git branch --merged <target> --format=%(refname:short)`).
+pub fn merged_branch_names(
+    repo_path: &str,
+    target_branch: &str,
+) -> Result<Vec<String>, GitError> {
+    let repo = git2::Repository::open(repo_path).map_err(GitError::internal)?;
+    let target_oid = repo
+        .revparse_single(target_branch)
+        .and_then(|obj| obj.peel_to_commit())
+        .map_err(|_| GitError::RevNotFound {
+            rev: target_branch.to_owned(),
+        })?
+        .id();
+
+    let mut names = Vec::new();
+    let branches = repo
+        .branches(Some(git2::BranchType::Local))
+        .map_err(GitError::internal)?;
+    for branch in branches {
+        let (branch, _) = branch.map_err(GitError::internal)?;
+        let Some(name) = branch.name().map_err(GitError::internal)? else {
+            continue;
+        };
+        let Some(oid) = branch.get().target() else {
+            continue;
+        };
+        let merged = oid == target_oid
+            || repo
+                .graph_descendant_of(target_oid, oid)
+                .map_err(GitError::internal)?;
+        if merged {
+            names.push(name.to_owned());
+        }
+    }
+    Ok(names)
+}

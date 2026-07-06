@@ -717,3 +717,94 @@ pub fn git_mark_resolved(repo_path: String, file_path: String) -> Result<(), Git
 pub fn git_conflict_sides(repo_path: String, file_path: String) -> Result<ConflictSides, GitError> {
     ops::merge::conflict_sides(&repo_path, &file_path)
 }
+
+// MARK: - Merge execution, merge-tree, and rebase operations
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_merge_base(
+    repo_path: String,
+    ref1: String,
+    ref2: String,
+) -> Result<String, GitError> {
+    ops::merge::merge_base(&repo_path, &ref1, &ref2)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_merge_tree(
+    repo_path: String,
+    ours: String,
+    theirs: String,
+) -> Result<MergeTreeInfo, GitError> {
+    ops::merge::merge_tree(&repo_path, &ours, &theirs)
+}
+
+/// Merge `branch` into the current branch with `--no-ff --no-edit`.
+/// Returns `true` when the merge stopped on conflicts.
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_merge_no_ff(repo_path: String, branch: String) -> Result<bool, GitError> {
+    ops::merge::merge_no_ff(&repo_path, &branch)
+}
+
+/// Plain `git merge <branch>` (fast-forward allowed).
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_merge(repo_path: String, branch: String) -> Result<(), GitError> {
+    ops::merge::merge_plain(&repo_path, &branch)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_merge_abort(repo_path: String) -> Result<(), GitError> {
+    ops::merge::merge_abort(&repo_path)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_merge_continue(repo_path: String) -> Result<(), GitError> {
+    ops::merge::merge_continue(&repo_path)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_rebase(worktree_path: String, onto: String) -> Result<(), GitError> {
+    ops::merge::rebase_onto(&worktree_path, &onto)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_rebase_abort(worktree_path: String) -> Result<(), GitError> {
+    ops::merge::rebase_abort(&worktree_path)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_rebase_continue(worktree_path: String) -> Result<(), GitError> {
+    ops::merge::rebase_continue(&worktree_path)
+}
+
+// MARK: - Name-status diffs and patch application
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_diff_name_status(
+    repo_path: String,
+    base: String,
+    head: String,
+) -> Result<Vec<NameStatusEntry>, GitError> {
+    ops::diff::diff_name_status(&repo_path, &base, &head)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_diff_name_only(
+    repo_path: String,
+    base: String,
+    head: String,
+) -> Result<Vec<String>, GitError> {
+    ops::diff::diff_name_only(&repo_path, &base, &head)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_apply_patch_cached(repo_path: String, patch: String) -> Result<(), GitError> {
+    ops::write::apply_patch_cached(&repo_path, &patch)
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn git_merged_branch_names(
+    repo_path: String,
+    target_branch: String,
+) -> Result<Vec<String>, GitError> {
+    ops::branch::merged_branch_names(&repo_path, &target_branch)
+}

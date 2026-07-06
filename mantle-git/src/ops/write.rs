@@ -421,3 +421,12 @@ pub fn commit(repo_path: &str, message: &str) -> Result<(), GitError> {
 
     Ok(())
 }
+
+/// Apply a unified diff to the index only (equivalent to `git apply --cached`).
+pub fn apply_patch_cached(repo_path: &str, patch: &str) -> Result<(), GitError> {
+    let repo = open_git2(repo_path)?;
+    let diff = git2::Diff::from_buffer(patch.as_bytes()).map_err(GitError::internal)?;
+    repo.apply(&diff, git2::ApplyLocation::Index, None)
+        .map_err(GitError::internal)?;
+    Ok(())
+}

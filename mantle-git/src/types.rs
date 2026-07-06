@@ -293,3 +293,34 @@ pub struct ConflictSides {
     pub ours: Option<String>,
     pub theirs: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NameStatusEntry {
+    /// Git status letter, including similarity score for renames/copies
+    /// (e.g. "A", "M", "D", "R100", "C086", "T").
+    pub status: String,
+    /// New path of the file (destination path for renames).
+    pub path: String,
+    /// Original path for renames/copies, `None` otherwise.
+    pub old_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct MergeConflictEntry {
+    pub path: String,
+    /// Conflict kind: "content", "modify/delete", or "add/add".
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct MergeTreeInfo {
+    /// True when the merge is conflict-free; `tree_oid` holds the merged tree.
+    pub clean: bool,
+    /// OID of the merged tree when clean, empty string otherwise.
+    pub tree_oid: String,
+    /// Conflicted paths when not clean.
+    pub conflicts: Vec<MergeConflictEntry>,
+}

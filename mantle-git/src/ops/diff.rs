@@ -1059,3 +1059,149 @@ fn index_blob_for_path(repo: &gix::Repository, path: &str) -> Option<Vec<u8>> {
     let obj = repo.find_object(entry.id).ok()?;
     Some(obj.data.clone())
 }
+
+// ---------------------------------------------------------------------------
+// Name-status / name-only tree diffs (CUT-743)
+// ---------------------------------------------------------------------------
+
+fn open_git2(repo_path: &str) -> Result<git2::Repository, GitError> {
+    git2::Repository::open(repo_path).map_err(GitError::internal)
+}
+
+fn resolve_git2_commit<'r>(
+    repo: &'r git2::Repository,
+    rev: &str,
+) -> Result<git2::Commit<'r>, GitError> {
+    repo.revparse_single(rev)
+        .and_then(|obj| obj.peel_to_commit())
+        .map_err(|_| GitError::RevNotFound {
+            rev: rev.to_owned(),
+        })
+}
+
+/// Tree diff with rename detection, mirroring git's `diff.renames=true` default.
+fn tree_diff_with_renames<'r>(
+    repo: &'r git2::Repository,
+    old_tree: &git2::Tree<'r>,
+    new_tree: &git2::Tree<'r>,
+) -> Result<git2::Diff<'r>, GitError> {
+    let mut diff = repo
+        .diff_tree_to_tree(Some(old_tree), Some(new_tree), None)
+        .map_err(GitError::internal)?;
+    let mut find_opts = git2::DiffFindOptions::new();
+    find_opts.renames(true);
+    diff.find_similar(Some(&mut find_opts))
+        .map_err(GitError::internal)?;
+    Ok(diff)
+}
+
+/// Extract per-delta status tokens (e.g. "M", "R100") from libgit2's RAW
+/// printer, which is the only place git2 exposes the rename similarity score
+/// (`DiffDelta::similarity` is not bound). Raw lines are emitted in delta
+/// order: ":100644 100644 <oid> <oid> R100\told new". The token before the
+/// first tab never contains spaces, so this parse is unambiguous even for
+/// paths with spaces.
+fn raw_status_tokens(diff: &git2::Diff<'_>) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let _ = diff.print(git2::DiffFormat::Raw, |_delta, _hunk, line| {
+        let content = String::from_utf8_lossy(line.content());
+        let before_tab = content.split('\t').next().unwrap_or("");
+        let token = before_tab
+            .split_whitespace()
+            .last()
+            .unwrap_or("")
+            .to_string();
+        tokens.push(token);
+        true
+    });
+    tokens
+}
+
+/// List changed files with status letters between two revisions
+/// (equivalent to `git diff --name-status base..head` — two-dot semantics).
+pub fn diff_name_status(
+    repo_path: &str,
+    base: &str,
+    head: &str,
+) -> Result<Vec<crate::types::NameStatusEntry>, GitError> {
+    let repo = open_git2(repo_path)?;
+    let base_tree = resolve_git2_commit(&repo, base)?
+        .tree()
+        .map_err(GitError::internal)?;
+    let head_tree = resolve_git2_commit(&repo, head)?
+        .tree()
+        .map_err(GitError::internal)?;
+    let diff = tree_diff_with_renames(&repo, &base_tree, &head_tree)?;
+    let status_tokens = raw_status_tokens(&diff);
+
+    let mut entries = Vec::new();
+    for (idx, delta) in diff.deltas().enumerate() {
+        let new_path = delta
+            .new_file()
+            .path()
+            .or_else(|| delta.old_file().path())
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let old_path = delta
+            .old_file()
+            .path()
+            .map(|p| p.to_string_lossy().to_string());
+        let is_rename = matches!(delta.status(), git2::Delta::Renamed | git2::Delta::Copied);
+
+        let status = status_tokens
+            .get(idx)
+            .filter(|t| !t.is_empty())
+            .cloned()
+            .unwrap_or_else(|| {
+                match delta.status() {
+                    git2::Delta::Added => "A",
+                    git2::Delta::Deleted => "D",
+                    git2::Delta::Renamed => "R",
+                    git2::Delta::Copied => "C",
+                    git2::Delta::Typechange => "T",
+                    _ => "M",
+                }
+                .to_owned()
+            });
+
+        entries.push(crate::types::NameStatusEntry {
+            status,
+            path: new_path,
+            old_path: if is_rename { old_path } else { None },
+        });
+    }
+    Ok(entries)
+}
+
+/// List changed file names between the merge base of `base`/`head` and `head`
+/// (equivalent to `git diff --name-only base...head` — three-dot semantics).
+/// For renames only the destination path is listed, matching the CLI.
+pub fn diff_name_only(
+    repo_path: &str,
+    base: &str,
+    head: &str,
+) -> Result<Vec<String>, GitError> {
+    let repo = open_git2(repo_path)?;
+    let base_commit = resolve_git2_commit(&repo, base)?;
+    let head_commit = resolve_git2_commit(&repo, head)?;
+    let merge_base = repo
+        .merge_base(base_commit.id(), head_commit.id())
+        .map_err(GitError::internal)?;
+    let base_tree = repo
+        .find_commit(merge_base)
+        .and_then(|c| c.tree())
+        .map_err(GitError::internal)?;
+    let head_tree = head_commit.tree().map_err(GitError::internal)?;
+    let diff = tree_diff_with_renames(&repo, &base_tree, &head_tree)?;
+
+    Ok(diff
+        .deltas()
+        .filter_map(|delta| {
+            delta
+                .new_file()
+                .path()
+                .or_else(|| delta.old_file().path())
+                .map(|p| p.to_string_lossy().to_string())
+        })
+        .collect())
+}
